@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::bail;
 use chrono::{DateTime, Utc};
-use primitive_types::{H160, U256};
+use ethers::types::{H160, U256};
 use serde::{de, ser::SerializeStruct as _, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 

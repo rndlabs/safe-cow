@@ -1,14 +1,13 @@
 use crate::{bytes_hex, quote::QuoteSigningScheme, DomainSeparator};
 use anyhow::{ensure, Context as _, Result};
-use primitive_types::{H160, H256};
+use ethers::prelude::k256::ecdsa::SigningKey;
+use ethers::signers::{Wallet, Signer};
+use ethers::types::{H160, H256, Signature as EthersSignature};
+use ethers::utils::keccak256;
 use serde::{de, Deserialize, Serialize};
 use std::{
     convert::TryInto as _,
     fmt::{self, Debug, Formatter},
-};
-use web3::{
-    signing::{self, Key, SecretKeyRef},
-    types::Recovery,
 };
 
 /// See [`Signature`].
@@ -269,14 +268,14 @@ pub fn hashed_eip712_message(
     message[0..2].copy_from_slice(&[0x19, 0x01]);
     message[2..34].copy_from_slice(&domain_separator.0);
     message[34..66].copy_from_slice(struct_hash);
-    signing::keccak256(&message)
+    keccak256(&message)
 }
 
 fn hashed_ethsign_message(domain_separator: &DomainSeparator, struct_hash: &[u8; 32]) -> [u8; 32] {
     let mut message = [0u8; 60];
     message[..28].copy_from_slice(b"\x19Ethereum Signed Message:\n32");
     message[28..].copy_from_slice(&hashed_eip712_message(domain_separator, struct_hash));
-    signing::keccak256(&message)
+    keccak256(&message)
 }
 
 /// Orders are always hashed into 32 bytes according to EIP-712.

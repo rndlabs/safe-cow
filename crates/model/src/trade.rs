@@ -2,7 +2,7 @@
 
 use crate::order::OrderUid;
 use num::BigUint;
-use primitive_types::{H160, H256};
+use ethers::types::{H160, H256};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 

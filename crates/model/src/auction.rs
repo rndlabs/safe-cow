@@ -4,7 +4,7 @@ use crate::{
     order::{Order, OrderUid},
     u256_decimal::DecimalU256,
 };
-use primitive_types::{H160, U256};
+use ethers::types::{H160, U256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::BTreeMap;

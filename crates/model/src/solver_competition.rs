@@ -3,7 +3,7 @@ use crate::{
     order::OrderUid,
     u256_decimal::{self, DecimalU256},
 };
-use primitive_types::{H160, H256, U256};
+use ethers::types::{H160, H256, U256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::BTreeMap;

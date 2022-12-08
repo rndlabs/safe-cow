@@ -13,8 +13,12 @@ use chrono::{offset::Utc, DateTime};
 use derivative::Derivative;
 use hex_literal::hex;
 use num::BigUint;
-use primitive_types::{H160, H256, U256};
-use secp256k1::ONE_KEY;
+use ethers::{
+    types::{H160, H256, U256},
+    signers::{Wallet, Signer},
+    utils::keccak256,
+};
+use ethers::prelude::k256::ecdsa::SigningKey;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::{serde_as, DisplayFromStr};
 use std::{
@@ -23,7 +27,6 @@ use std::{
     str::FromStr,
 };
 use strum::{AsRefStr, EnumString, EnumVariantNames};
-use web3::signing::{self, Key, SecretKeyRef};
 
 /// The flag denoting that an order is buying ETH (or the chain's native token).
 /// It is used in place of an actual buy token address in an order.
@@ -304,7 +307,7 @@ impl OrderData {
             BuyTokenDestination::Erc20 => &Self::BALANCE_ERC20,
             BuyTokenDestination::Internal => &Self::BALANCE_INTERNAL,
         });
-        signing::keccak256(&hash_data)
+        keccak256(&hash_data)
     }
 
     pub fn token_pair(&self) -> Option<TokenPair> {
@@ -389,15 +392,15 @@ impl OrderCancellations {
     pub fn hash_struct(&self) -> [u8; 32] {
         let mut encoded_uids = Vec::with_capacity(32 * self.order_uids.len());
         for order_uid in &self.order_uids {
-            encoded_uids.extend_from_slice(&signing::keccak256(&order_uid.0));
+            encoded_uids.extend_from_slice(&keccak256(&order_uid.0));
         }
 
-        let array_hash = signing::keccak256(&encoded_uids);
+        let array_hash = keccak256(&encoded_uids);
 
         let mut hash_data = [0u8; 64];
         hash_data[0..32].copy_from_slice(&Self::TYPE_HASH);
         hash_data[32..64].copy_from_slice(&array_hash);
-        signing::keccak256(&hash_data)
+        keccak256(&hash_data)
     }
 }
 
@@ -444,10 +447,10 @@ impl OrderCancellation {
     const TYPE_HASH: [u8; 32] =
         hex!("7b41b3a6e2b3cae020a3b2f9cdc997e0d420643957e7fea81747e984e47c88ec");
 
-    pub fn for_order(
+    pub async fn for_order(
         order_uid: OrderUid,
         domain_separator: &DomainSeparator,
-        key: SecretKeyRef,
+        key: SigningKey,
     ) -> Self {
         let mut result = Self {
             order_uid,
@@ -459,15 +462,15 @@ impl OrderCancellation {
             domain_separator,
             &result.hash_struct(),
             key,
-        );
+        ).await;
         result
     }
 
     pub fn hash_struct(&self) -> [u8; 32] {
         let mut hash_data = [0u8; 64];
         hash_data[0..32].copy_from_slice(&Self::TYPE_HASH);
-        hash_data[32..64].copy_from_slice(&signing::keccak256(&self.order_uid.0));
-        signing::keccak256(&hash_data)
+        hash_data[32..64].copy_from_slice(&keccak256(&self.order_uid.0));
+        keccak256(&hash_data)
     }
 
     pub fn validate(&self, domain_separator: &DomainSeparator) -> Result<H160> {
@@ -785,10 +788,8 @@ mod tests {
     use chrono::NaiveDateTime;
     use hex_literal::hex;
     use maplit::hashset;
-    use primitive_types::H256;
-    use secp256k1::{PublicKey, Secp256k1, SecretKey};
+    use ethers::types::H256;
     use serde_json::json;
-    use web3::signing::keccak256;
 
     #[test]
     fn deserialization_and_back() {

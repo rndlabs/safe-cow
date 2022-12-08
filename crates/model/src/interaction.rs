@@ -1,4 +1,4 @@
-use primitive_types::{H160, U256};
+use ethers::types::{H160, U256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Eq, PartialEq, Clone, Debug, Hash, Default, Deserialize, Serialize)]
