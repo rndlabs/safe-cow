@@ -113,27 +113,15 @@ impl std::fmt::Debug for DomainSeparator {
 
 impl DomainSeparator {
     pub fn new(chain_id: u64, contract_address: H160) -> Self {
-        lazy_static! {
-            /// The EIP-712 domain name used for computing the domain separator.
-            static ref DOMAIN_NAME: [u8; 32] = signing::keccak256(b"Gnosis Protocol");
+        let domain = EIP712Domain {
+            name: Some("Gnosis Protocol".to_string()),
+            version: Some("v2".to_string()),
+            chain_id: Some(chain_id.into()),
+            verifying_contract: Some(contract_address),
+            salt: None,
+        };
 
-            /// The EIP-712 domain version used for computing the domain separator.
-            static ref DOMAIN_VERSION: [u8; 32] = signing::keccak256(b"v2");
-
-            /// The EIP-712 domain type used computing the domain separator.
-            static ref DOMAIN_TYPE_HASH: [u8; 32] = signing::keccak256(
-                b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
-            );
-        }
-        let abi_encode_string = encode(&[
-            Token::Uint((*DOMAIN_TYPE_HASH).into()),
-            Token::Uint((*DOMAIN_NAME).into()),
-            Token::Uint((*DOMAIN_VERSION).into()),
-            Token::Uint(chain_id.into()),
-            Token::Address(contract_address),
-        ]);
-
-        DomainSeparator(signing::keccak256(abi_encode_string.as_slice()))
+        DomainSeparator(domain.separator())
     }
 }
 
