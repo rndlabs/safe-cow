@@ -32,6 +32,8 @@ use strum::{AsRefStr, EnumString, EnumVariantNames};
 /// It is used in place of an actual buy token address in an order.
 pub const BUY_ETH_ADDRESS: H160 = H160([0xee; 20]);
 
+pub const ONE_KEY: [u8; 32] = hex!("0000000000000000000000000000000000000000000000000000000000000001");
+
 #[derive(Eq, PartialEq, Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Interactions {
     pub pre: Vec<InteractionData>,
@@ -441,7 +443,6 @@ pub struct OrderCancellation {
 impl Default for OrderCancellation {
     fn default() -> Self {
         let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-        let ONE_KEY = hex!("0000000000000000000000000000000000000000000000000000000000000001");
         let sk = SigningKey::from_bytes(&ONE_KEY).unwrap();
         let s = runtime.block_on(Self::for_order(
             OrderUid::default(),
@@ -845,7 +846,7 @@ mod tests {
         let signing_scheme = EcdsaSigningScheme::Eip712;
         let expected = Order {
             metadata: OrderMetadata {
-                creation_date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(3, 0), Utc),
+                creation_date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp_opt(3, 0).unwrap(), Utc),
                 class: OrderClass::Limit(LimitOrderClass {
                     surplus_fee: U256::MAX,
                     surplus_fee_timestamp: Default::default(),
@@ -1123,7 +1124,7 @@ mod tests {
             .with_sell_token_balance(SellTokenSource::External)
             .with_buy_token_balance(BuyTokenDestination::Internal)
             .with_creation_date(DateTime::<Utc>::from_utc(
-                NaiveDateTime::from_timestamp(3, 0),
+                NaiveDateTime::from_timestamp_opt(3, 0).unwrap(),
                 Utc,
             ))
             .with_presign(H160::from_low_u64_be(1))
