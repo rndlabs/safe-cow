@@ -8,17 +8,17 @@ use crate::{
     u256_decimal::{self, DecimalU256},
     DomainSeparator, TokenPair,
 };
-use eyre::{anyhow, Result};
 use chrono::{offset::Utc, DateTime};
 use derivative::Derivative;
-use hex_literal::hex;
-use num::BigUint;
+use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::{
+    signers::{Signer, Wallet},
     types::{H160, H256, U256},
-    signers::{Wallet, Signer},
     utils::keccak256,
 };
-use ethers::prelude::k256::ecdsa::SigningKey;
+use eyre::{anyhow, Result};
+use hex_literal::hex;
+use num::BigUint;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::{serde_as, DisplayFromStr};
 use std::{
@@ -190,17 +190,24 @@ impl OrderBuilder {
     }
 
     /// Sets owner, uid, signature.
-    pub fn sign_with(
+    pub async fn sign_with(
         mut self,
         signing_scheme: EcdsaSigningScheme,
         domain: &DomainSeparator,
-        key: SecretKeyRef,
+        key: SigningKey,
     ) -> Self {
-        self.0.metadata.owner = key.address();
-        self.0.metadata.uid = self.0.data.uid(domain, &key.address());
-        self.0.signature =
-            EcdsaSignature::sign(signing_scheme, domain, &self.0.data.hash_struct(), key)
-                .to_signature(signing_scheme);
+        let wallet = Wallet::from(key);
+
+        self.0.metadata.owner = wallet.address();
+        self.0.metadata.uid = self.0.data.uid(domain, &wallet.address());
+        self.0.signature = EcdsaSignature::sign(
+            signing_scheme,
+            domain,
+            &self.0.data.hash_struct(),
+            wallet.signer().clone(),
+        )
+        .await
+        .to_signature(signing_scheme);
         self
     }
 
@@ -433,11 +440,15 @@ pub struct OrderCancellation {
 
 impl Default for OrderCancellation {
     fn default() -> Self {
-        Self::for_order(
+        let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
+        let ONE_KEY = hex!("0000000000000000000000000000000000000000000000000000000000000001");
+        let sk = SigningKey::from_bytes(&ONE_KEY).unwrap();
+        let s = runtime.block_on(Self::for_order(
             OrderUid::default(),
             &DomainSeparator::default(),
-            SecretKeyRef::new(&ONE_KEY),
-        )
+            sk,
+        ));
+        s
     }
 }
 
@@ -462,7 +473,8 @@ impl OrderCancellation {
             domain_separator,
             &result.hash_struct(),
             key,
-        ).await;
+        )
+        .await;
         result
     }
 
@@ -786,9 +798,9 @@ mod tests {
     use super::*;
     use crate::signature::{EcdsaSigningScheme, SigningScheme};
     use chrono::NaiveDateTime;
+    use ethers::types::H256;
     use hex_literal::hex;
     use maplit::hashset;
-    use ethers::types::H256;
     use serde_json::json;
 
     #[test]
@@ -1093,17 +1105,12 @@ mod tests {
         assert!(!order.contains_token_from(&hashset!(other_token)));
     }
 
-    pub fn h160_from_public_key(key: PublicKey) -> H160 {
-        let hash = keccak256(&key.serialize_uncompressed()[1..] /* cut '04' */);
-        H160::from_slice(&hash[12..])
-    }
-
-    #[test]
-    fn order_builder_signature_recovery() {
+    #[tokio::test]
+    async fn order_builder_signature_recovery() {
         const PRIVATE_KEY: [u8; 32] =
             hex!("0000000000000000000000000000000000000000000000000000000000000001");
-        let sk = SecretKey::from_slice(&PRIVATE_KEY).unwrap();
-        let public_key = PublicKey::from_secret_key(&Secp256k1::signing_only(), &sk);
+        let sk = SigningKey::from_bytes(&PRIVATE_KEY).unwrap();
+        let wallet = Wallet::from(sk.clone());
         let order = OrderBuilder::default()
             .with_sell_token(H160::zero())
             .with_sell_amount(100.into())
@@ -1124,8 +1131,9 @@ mod tests {
             .sign_with(
                 EcdsaSigningScheme::Eip712,
                 &DomainSeparator::default(),
-                SecretKeyRef::from(&sk),
+                sk.clone(),
             )
+            .await
             .build();
 
         let owner = order
@@ -1134,7 +1142,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(owner, h160_from_public_key(public_key));
+        assert_eq!(owner, wallet.address());
     }
 
     #[test]

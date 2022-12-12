@@ -1,7 +1,7 @@
 use crate::{bytes_hex, quote::QuoteSigningScheme, DomainSeparator};
 use eyre::{ensure, Context as _, Result};
 use ethers::prelude::k256::ecdsa::SigningKey;
-use ethers::signers::{Wallet, Signer};
+use ethers::signers::Wallet;
 use ethers::types::{H160, H256, Signature as EthersSignature};
 use ethers::utils::keccak256;
 use serde::{de, Deserialize, Serialize};
@@ -209,7 +209,7 @@ impl From<Signature> for JsonSignature {
 }
 
 impl TryFrom<JsonSignature> for Signature {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from(json: JsonSignature) -> Result<Self, Self::Error> {
         Self::from_bytes(json.signing_scheme, &json.signature)
@@ -322,26 +322,38 @@ impl EcdsaSignature {
         struct_hash: &[u8; 32],
     ) -> Result<H160> {
         let message = hashed_signing_message(signing_scheme, domain_separator, struct_hash);
-        let recovery = Recovery::new(message, self.v as u64, self.r, self.s);
-        let (signature, recovery_id) = recovery
-            .as_signature()
-            .context("unexpectedly invalid signature")?;
-        Ok(signing::recover(&message, &signature, recovery_id)?)
+        let sig = EthersSignature {
+            v: self.v.into(),
+            r: self.r.0.into(),
+            s: self.s.0.into(),
+        };
+        Ok(sig.recover(message)?)
     }
 
-    pub fn sign(
+    pub async fn sign(
         signing_scheme: EcdsaSigningScheme,
         domain_separator: &DomainSeparator,
         struct_hash: &[u8; 32],
-        key: SecretKeyRef,
+        key: SigningKey,
     ) -> Self {
-        let message = hashed_signing_message(signing_scheme, domain_separator, struct_hash);
+        let message = H256::from(hashed_signing_message(signing_scheme, domain_separator, struct_hash));
         // Unwrap because the only error is for invalid messages which we don't create.
-        let signature = key.sign(&message, None).unwrap();
+        // create a wallet using the private key from key
+        let wallet = Wallet::from(key);
+        let signature = wallet.sign_hash(message) as EthersSignature;
+
+        // declare 32 bytes variable for r and s
+        let mut r = [0u8; 32];
+        let mut s = [0u8; 32];
+        
+        // copy the bytes from the signature to the r and s variables
+        signature.r.to_big_endian(&mut r);
+        signature.s.to_big_endian(&mut s);
+        
         Self {
             v: signature.v as u8,
-            r: signature.r,
-            s: signature.s,
+            r: H256::from(r),
+            s: H256::from(s),
         }
     }
 
