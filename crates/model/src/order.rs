@@ -597,7 +597,7 @@ impl Display for OrderUid {
 
 impl fmt::Debug for OrderUid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
@@ -635,13 +635,12 @@ impl<'de> Deserialize<'de> for OrderUid {
             {
                 let s = s.strip_prefix("0x").ok_or_else(|| {
                     de::Error::custom(format!(
-                        "{:?} can't be decoded as hex uid because it does not start with '0x'",
-                        s
+                        "{s:?} can't be decoded as hex uid because it does not start with '0x'"
                     ))
                 })?;
                 let mut value = [0u8; 56];
                 hex::decode_to_slice(s, value.as_mut()).map_err(|err| {
-                    de::Error::custom(format!("failed to decode {:?} as hex uid: {}", s, err))
+                    de::Error::custom(format!("failed to decode {s:?} as hex uid: {err}"))
                 })?;
                 Ok(OrderUid(value))
             }
@@ -791,7 +790,7 @@ pub fn debug_biguint_to_string(
     value: &BigUint,
     formatter: &mut std::fmt::Formatter,
 ) -> Result<(), std::fmt::Error> {
-    formatter.write_fmt(format_args!("{}", value))
+    formatter.write_fmt(format_args!("{value}"))
 }
 
 #[cfg(test)]

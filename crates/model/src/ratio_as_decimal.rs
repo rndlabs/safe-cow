@@ -43,7 +43,7 @@ where
 {
     let big_decimal =
         BigDecimal::from_str(&Cow::<str>::deserialize(deserializer)?).map_err(|err| {
-            de::Error::custom(format!("failed to decode decimal BigDecimal: {}", err))
+            de::Error::custom(format!("failed to decode decimal BigDecimal: {err}"))
         })?;
     let (x, exp) = big_decimal.into_bigint_and_exponent();
     let numerator_bytes = x.to_bytes_le();
@@ -53,7 +53,7 @@ where
     Ok(numerator
         / ten.pow(
             exp.try_into()
-                .map_err(|err| de::Error::custom(format!("decimal exponent overflow: {}", err)))?,
+                .map_err(|err| de::Error::custom(format!("decimal exponent overflow: {err}")))?,
         ))
 }
 
