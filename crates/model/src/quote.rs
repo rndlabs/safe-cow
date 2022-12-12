@@ -4,7 +4,7 @@ use crate::{
     signature::SigningScheme,
     time, u256_decimal,
 };
-use anyhow::bail;
+use eyre::bail;
 use chrono::{DateTime, Utc};
 use ethers::types::{H160, U256};
 use serde::{de, ser::SerializeStruct as _, Deserialize, Deserializer, Serialize, Serializer};
@@ -82,7 +82,7 @@ pub fn default_verification_gas_limit() -> u64 {
 }
 
 impl TryFrom<QuoteSigningDeserializationData> for QuoteSigningScheme {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from(data: QuoteSigningDeserializationData) -> Result<Self, Self::Error> {
         match (

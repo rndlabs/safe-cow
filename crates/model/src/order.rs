@@ -8,7 +8,7 @@ use crate::{
     u256_decimal::{self, DecimalU256},
     DomainSeparator, TokenPair,
 };
-use anyhow::{anyhow, Result};
+use eyre::{anyhow, Result};
 use chrono::{offset::Utc, DateTime};
 use derivative::Derivative;
 use hex_literal::hex;

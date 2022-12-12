@@ -1,5 +1,5 @@
 use crate::{bytes_hex, quote::QuoteSigningScheme, DomainSeparator};
-use anyhow::{ensure, Context as _, Result};
+use eyre::{ensure, Context as _, Result};
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::signers::{Wallet, Signer};
 use ethers::types::{H160, H256, Signature as EthersSignature};
@@ -218,7 +218,7 @@ impl TryFrom<JsonSignature> for Signature {
 
 #[derive(Debug)]
 pub enum VerificationError {
-    UnableToRecoverSigner(anyhow::Error),
+    UnableToRecoverSigner(eyre::Error),
     UnexpectedSigner(H160),
     MissingFrom,
 }
