@@ -9,12 +9,12 @@ license = "MIT OR Apache-2.0"
 doctest = false
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 bigdecimal = { workspace = true }
 chrono = { workspace = true, features = ["serde", "clock"] }
 derivative = { workspace = true }
 ethers = { workspace = true }
+eyre = { workspace = true }
 hex = { workspace = true, default-features = false }
 hex-literal = { workspace = true }
 lazy_static = { workspace = true }
