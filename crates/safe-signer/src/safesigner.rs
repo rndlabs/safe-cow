@@ -1,0 +1,125 @@
+use eyre::Result;
+
+use ethers::{
+    prelude::*,
+    types::transaction::eip712::{Eip712, EIP712WithDomain, EIP712Domain}
+};
+
+use crate::{SignMessage, Opts};
+// const MAGIC_NUMBER: [u8; 4] = [0x16, 0x26, 0xba, 0x7e];
+const MAGIC_NUMBER: [u8; 4] = [0x20, 0xc1, 0x3b, 0x0b];
+
+
+// The EIP-712 struct definition for a Safe Message
+#[derive(Eip712, EthAbiType, Clone)]
+#[eip712()]
+pub struct SafeMessage {
+    message: Bytes
+}
+
+// Generate the type-safe contract bindings for the EIP-1271 interface
+abigen!(
+    ERC1271SignatureValidator,
+    "./abi/ERC1271SignatureValidator.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
+/// Run the sign message command
+pub async fn run(config: SignMessage, opts: &Opts) -> Result<()> {
+    // test if the message is a valid hex string otherwise encode string as bytes
+    let message = if config.message.starts_with("0x") {
+        hex::decode(&config.message[2..])?
+    } else {
+        config.message.as_bytes().to_vec()
+    };
+
+    let message = Bytes::from(message);
+    println!("Message to sign with the safe: {message:#}");
+
+    // get the safe signature
+    let (digest, safe_signature) = safe_signature_of_message(
+        &message,
+        opts
+    ).await?;
+
+    // check if the signature is valid
+    let valid = verify_signature(
+        &message,
+        &safe_signature,
+        opts
+    ).await?;
+
+    // print the signature
+    println!("Signature: 0x{}", hex::encode(safe_signature));
+
+    if valid {
+        println!("Signature is valid");
+    } else {
+        println!("Signature is invalid");
+    }
+
+    Ok(())
+}
+
+pub async fn safe_signature_of_message(
+    message: &Bytes,
+    opts: &Opts,
+) -> Result<([u8; 32], Vec<u8>)> {
+    let provider = Provider::<Http>::try_from(opts.rpc_url)?;
+    let chain_id = provider.get_chainid().await?;
+
+    let safe_message = SafeMessage { message: message.clone() };
+    let safe_message = EIP712WithDomain::new(safe_message)?.set_domain(EIP712Domain {
+        name: None,
+        version: None,
+        chain_id: Some(chain_id.into()),
+        verifying_contract: Some(opts.safe.as_address().unwrap().clone()),
+        salt: None,
+    });
+
+    // sign the typed data and assemble all the signatures
+    let mut signatures = Vec::new();
+    for pk in pks {
+        let wallet = pk.parse::<LocalWallet>()?;
+        let signature = wallet.sign_typed_data(&safe_message).await?;
+
+        signatures.push(signature);
+    }
+
+    // join the signatures into a single bytes array
+    let mut packed = Vec::new();
+    for signature in signatures {
+        packed.extend_from_slice(&signature.to_vec());
+    }
+
+    Ok((safe_message.encode_eip712().unwrap(), packed))
+}
+
+/// Verify the signature of a hash against a contract that implements the
+/// EIP-1271 interface.
+pub async fn verify_signature(
+    data: &Bytes,
+    signature: &Vec<u8>,
+    opts: &Opts
+) -> Result<bool> {
+    let provider = Provider::<Http>::try_from(opts.rpc_url.clone())?;
+
+    let contract = ERC1271SignatureValidator::new(*opts.safe.as_address().unwrap(), provider.into());
+
+    // convert digest to bytes32 for the contract call
+    let eip1271_result: [u8; 4] = contract
+        .is_valid_signature(data.clone(), Bytes::from(signature.clone()))
+        .call()
+        .await?;
+
+    // check the result against the magic number
+    Ok(eip1271_result == MAGIC_NUMBER)
+}
+
+/// Verify with a high certainty that the address is a Safe contract
+pub async fn verify_is_safe(
+    safe: &Address,
+    opts: &Opts
+) -> Result<bool> {
+    unimplemented!();
+}
