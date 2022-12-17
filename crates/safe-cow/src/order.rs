@@ -54,12 +54,13 @@ where
     let order_kind = order_kinds[order_kind];
 
     let token_amount0 =
-        get_token_amount(&usable_tokens, order_kind.to_string(), provider.clone()).await?;
+        get_token_amount(&usable_tokens, order_kind.to_string(), provider.clone(), &opts).await?;
 
     let token_amount1 = get_token_amount(
         &usable_tokens,
         order_kind.invert().to_string(),
         provider.clone(),
+        &opts,
     )
     .await?;
 
@@ -290,6 +291,7 @@ pub async fn get_token_amount<M>(
     usable_tokens: &OrderTokens,
     msg: String,
     provider: Arc<Provider<M>>,
+    opts: &Opts,
 ) -> Result<TokenAmount>
 where
     M: JsonRpcClient + Send + Sync + 'static,
@@ -309,19 +311,26 @@ where
                 }
             }
 
-            Token::from_address(t?, provider).await?
+            Token::from_address(t?, provider.clone()).await?
         }
     };
 
-    let amount = get_amount(&token);
+    let amount = get_amount(&token, provider.clone(), &opts).await;
 
     Ok(TokenAmount::new(token, amount))
 }
 
 /// Prompt the user to input a token amount. Enforce that the amount is valid.
-pub fn get_amount(token: &Token) -> U256 {
+pub async fn get_amount<M>(token: &Token, provider: Arc<Provider<M>>, opts: &Opts) -> U256 
+where M: JsonRpcClient + Send + Sync + 'static
+{
+    // Get the balance of the token
+    let contract = ERC20::new(token.into_address(), provider.clone());
+    let balance = contract.balance_of(*opts.safe.as_address().unwrap()).call().await.unwrap();
+    let balance = ethers::utils::format_units(balance, i32::from(token.decimals)).unwrap();
+
     let mut amount = dialoguer::Input::<String>::new()
-        .with_prompt(format!("Amount of {}", token.symbol))
+        .with_prompt(format!("Amount of {} (Balance: {balance})", token.symbol))
         .interact();
 
     amount = loop {
