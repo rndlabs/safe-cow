@@ -6,20 +6,80 @@ use dialoguer::{theme::ColorfulTheme, FuzzySelect, Select};
 use token_list::TokenList;
 
 use crate::{
-    get_chain_id, get_cowswap_api_url, get_cowswap_explorer_url, safesigner::{verify_signature, safe_signature_of_message},
-    SettlementContract, CreateOrder, SupportedChains, Opts,
+    get_cowswap_api_url, get_cowswap_explorer_url,
+    safesigner::{safe_signature_of_message, verify_signature},
+    CreateOrder, Opts, SettlementContract, SupportedChains, Invertible,
 };
 
 use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, SellTokenSource};
 
+pub enum OrderTokens {
+    TokenList(TokenList),
+    Custom,
+}
+
 /// Run the sign order command
-pub async fn run(config: CreateOrder, opts: Opts) -> Result<()> {
+pub async fn run<M>(
+    config: CreateOrder,
+    opts: &Opts,
+    provider: Arc<Provider<M>>,
+    chain: SupportedChains,
+) -> Result<()>
+where
+    M: JsonRpcClient,
+{
+    // set order_tokens to TokenList or Custom depending on the user's choice
+    let usable_tokens = match dialoguer::Confirm::new()
+        .with_prompt("Use a token list for selecting tokens?")
+        .interact()?
+    {
+        true => OrderTokens::TokenList(chain.get_token_list().await?),
+        false => OrderTokens::Custom,
+    };
+
+    let order_kinds = vec![OrderKind::Buy, OrderKind::Sell];
+
+    // Is this a buy or sell order?
+    let order_kind = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Order direction")
+        .items(&order_kinds)
+        .default(0)
+        .interact()?;
+    let order_kind = order_kinds[order_kind];
+
+    let (token_0_address, token_0_amount) = get_token(&usable_tokens, order_kind.to_string())?;
+
+    let (token_1_address, token_1_amount) =
+        get_token(&usable_tokens, order_kind.invert().to_string())?;
+
+    // if the order is a sell order, we need to invert the token amounts
+    let (buy_token, buy_amount, sell_token, sell_amount) = match order_kind {
+        OrderKind::Buy => (
+            token_0_address,
+            token_0_amount,
+            token_1_address,
+            token_1_amount,
+        ),
+        OrderKind::Sell => (
+            token_1_address,
+            token_1_amount,
+            token_0_address,
+            token_0_amount,
+        ),
+    };
+
+    // output the order details
+    println!(
+        "{} {} {} for {} {}",
+        order_kind, token_0_amount, token_0_address, token_1_amount, token_1_address,
+    );
+
     // 1. Create the cowswap order
     let order = OrderBuilder::default()
-        .with_sell_token(*config.sell_token.as_address().unwrap())
-        .with_sell_amount(U256::from_dec_str(&config.sell_amount).unwrap())
-        .with_buy_token(*config.buy_token.as_address().unwrap())
-        .with_buy_amount(U256::from_dec_str(&config.buy_amount).unwrap())
+        .with_buy_token(buy_token)
+        .with_buy_amount(buy_amount)
+        .with_sell_token(sell_token)
+        .with_sell_amount(sell_amount)
         // make order valid to current time + 20 minutes
         .with_valid_to(chrono::Utc::now().timestamp() as u32 + config.valid_to.unwrap_or(1200))
         // by setting fee amount to 0, we default to limit orders
@@ -28,37 +88,22 @@ pub async fn run(config: CreateOrder, opts: Opts) -> Result<()> {
         // .with_partially_fillable(false)
         .with_sell_token_balance(SellTokenSource::Erc20)
         .with_buy_token_balance(BuyTokenDestination::Erc20)
-        .with_kind(OrderKind::Sell)
+        .with_kind(order_kind)
         .build();
 
     // 2. Get the chain, chain id and contract address for the signing domain
-    let chain =
-        SupportedChains::get_by_chain_id(get_chain_id(&opts.rpc_url).await?).unwrap();
     let contract_address = SettlementContract::get_by_chain(&chain).get_address();
-    let chain_id = chain.get_chain_id();
 
     // 3. Calculate the digest of the order
-    let domain_separator = model::DomainSeparator::new(chain_id, contract_address);
+    let domain_separator = model::DomainSeparator::new(chain.get_chain_id(), contract_address);
 
-    println!("Domain separator: {domain_separator:#?}");
+    let digest =
+        model::signature::hashed_eip712_message(&domain_separator, &order.data.hash_struct())
+            .into();
 
-    let digest32 =
-        model::signature::hashed_eip712_message(&domain_separator, &order.data.hash_struct());
-    let digest: Bytes = digest32.into();
+    let (_safe_msg_digest, signature) = safe_signature_of_message(&digest, &opts).await?;
 
-    println!("EIP-712 Typed digest: {digest}");
-
-    let (_safe_msg_digest, signature) = safe_signature_of_message(
-        &digest,
-        &opts
-    ).await?;
-
-    let valid = verify_signature(
-        &digest,
-        &signature,
-        &opts
-    )
-    .await?;
+    let valid = verify_signature(&digest, &signature, &opts).await?;
 
     println!("Signature is valid: {valid:?}");
 
