@@ -23,7 +23,13 @@ pub enum Commands {
 pub struct Opts {
     #[clap(subcommand)]
     pub subcommand: Commands,
-    #[clap(long, value_parser, default_value = "http://erigon.dappnode:8545/", env = "RPC_URL", help = "The RPC to connect to")]
+    #[clap(
+        long,
+        value_parser,
+        default_value = "http://erigon.dappnode:8545/",
+        env = "RPC_URL",
+        help = "The RPC to connect to"
+    )]
     pub rpc_url: String,
     #[clap(
         help = "The Safe address the order is from",
@@ -67,7 +73,6 @@ pub struct CreateOrder {
     pub staging: Option<bool>,
 }
 
-
 #[derive(Args, Debug, Clone)]
 pub struct CancelOrder {
     #[clap(
@@ -82,7 +87,7 @@ pub struct CancelOrder {
 pub struct SignMessage {
     #[clap(
         help = "The message to sign. If prepended with 0x, it will be interpreted as hex, otherwise as a string.",
-        value_name = "MESSAGE",
+        value_name = "MESSAGE"
     )]
     pub message: String,
 }
@@ -181,9 +186,15 @@ pub enum SettlementContract {
 impl SettlementContract {
     pub fn get_address(&self) -> Address {
         match self {
-            SettlementContract::Mainnet => "0x9008D19f58AAbD9eD0D60971565AA8510560ab41".parse().unwrap(),
-            SettlementContract::Goerli => "0x9008D19f58AAbD9eD0D60971565AA8510560ab41".parse().unwrap(),
-            SettlementContract::Gnosis => "0x9008D19f58AAbD9eD0D60971565AA8510560ab41".parse().unwrap(),
+            SettlementContract::Mainnet => "0x9008D19f58AAbD9eD0D60971565AA8510560ab41"
+                .parse()
+                .unwrap(),
+            SettlementContract::Goerli => "0x9008D19f58AAbD9eD0D60971565AA8510560ab41"
+                .parse()
+                .unwrap(),
+            SettlementContract::Gnosis => "0x9008D19f58AAbD9eD0D60971565AA8510560ab41"
+                .parse()
+                .unwrap(),
         }
     }
 
@@ -198,8 +209,8 @@ impl SettlementContract {
 
 /// Connect to an RPC node and get the chain id
 pub async fn get_chain_id(rpc_url: &str) -> Result<u64> {
-    let provider = Provider::<Http>::try_from(rpc_url)
-        .expect("Could not instantiate HTTP provider");
+    let provider =
+        Provider::<Http>::try_from(rpc_url).expect("Could not instantiate HTTP provider");
 
     let chain_id = provider.get_chainid().await?;
     Ok(chain_id.as_u64())
