@@ -165,7 +165,7 @@ where
 }
 
 /// An analogue for the similar CurrencyAmount popularised by Uniswap's sdk-core.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TokenAmount {
     pub token: Token,
     pub amount: U256,
@@ -179,7 +179,10 @@ impl TokenAmount {
 
 impl fmt::Display for TokenAmount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.amount, self.token.symbol)
+        // // format the amount with the token's decimals
+        ethers::utils::format_units(self.amount, u32::from(self.token.decimals))
+            .map_err(|_| fmt::Error)
+            .and_then(|amount| write!(f, "{} {}", amount, self.token.symbol))
     }
 }
 
