@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use eyre::Error;
 use clap::Parser;
 
@@ -13,14 +15,16 @@ async fn main() -> Result<(), Error> {
     let opts = Opts::parse();
 
     // connect to the RPC    
-    let provider = Provider::<Http>::try_from(opts.rpc_url.clone())?;
+    let provider = Arc::new(Provider::<Http>::try_from(&opts.rpc_url)?);
+    let chain = SupportedChains::get_chain(provider.clone()).await?;
+
 
     // determine the name of chain the RPC is connected to
     let chain_id = provider.get_chainid().await?;
 
     match opts.subcommand {
         Commands::CreateOrder(order) => {
-            order::run(order, &opts).await?;
+            order::run(order, &opts, provider, chain).await?;
         }
         Commands::CancelOrder(mut order) => {
             // not implemented yet

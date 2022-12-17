@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use eyre::Result;
 
 use ethers::{
@@ -21,6 +23,12 @@ pub struct SafeMessage {
 abigen!(
     ERC1271SignatureValidator,
     "./abi/ERC1271SignatureValidator.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
+abigen!(
+    GnosisSafe,
+    "./abi/GnosisSafe.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
@@ -65,15 +73,13 @@ pub async fn safe_signature_of_message(
     message: &Bytes,
     opts: &Opts,
 ) -> Result<([u8; 32], Vec<u8>)> {
-    let provider = Provider::<Http>::try_from(opts.rpc_url)?;
-    let chain_id = provider.get_chainid().await?;
-
+    let provider = Provider::<Http>::try_from(&opts.rpc_url)?;
     let safe_message = SafeMessage { message: message.clone() };
     let safe_message = EIP712WithDomain::new(safe_message)?.set_domain(EIP712Domain {
         name: None,
         version: None,
-        chain_id: Some(chain_id.into()),
-        verifying_contract: Some(opts.safe.as_address().unwrap().clone()),
+        chain_id: Some(provider.get_chainid().await?),
+        verifying_contract: Some(*opts.safe.as_address().unwrap()),
         salt: None,
     });
 
@@ -102,10 +108,9 @@ pub async fn safe_signature_of_message(
 pub async fn verify_signature(
     data: &Bytes,
     signature: &Vec<u8>,
-    opts: &Opts
+    opts: &Opts,
 ) -> Result<bool> {
-    let provider = Provider::<Http>::try_from(opts.rpc_url.clone())?;
-
+    let provider = Provider::<Http>::try_from(opts.rpc_url.as_str())?;
     let contract = ERC1271SignatureValidator::new(*opts.safe.as_address().unwrap(), provider.into());
 
     // convert digest to bytes32 for the contract call
@@ -119,6 +124,19 @@ pub async fn verify_signature(
 }
 
 /// Verify with a high certainty that the address is a Safe contract
+pub async fn verify_is_safe<M>(
+    safe: Address,
+    provider: Arc<Provider<M>>,
+) -> Result<bool> 
+where M: JsonRpcClient + 'static {
+    let contract = GnosisSafe::new(safe, provider.clone());
+
+    // check that the version = 1.3.0 and the threshold is 1 or greater
+    let version: String = contract.version().call().await?;
+    let threshold: U256 = contract.get_threshold().call().await?;
+
+    Ok(version == "1.3.0" && threshold > 0.into())
+}
 
 /// Prompt the user for private keys
 pub fn prompt_private_keys() -> Result<Vec<String>> {
