@@ -1,10 +1,9 @@
 use eyre::Result;
 use reqwest::Client;
-
-use ethers::{
-    prelude::*,
-    types::transaction::eip712::{EIP712Domain, EIP712WithDomain},
-};
+use ethers::prelude::*;
+use std::{str::FromStr, sync::Arc};
+use dialoguer::{theme::ColorfulTheme, FuzzySelect, Select};
+use token_list::TokenList;
 
 use crate::{
     get_chain_id, get_cowswap_api_url, get_cowswap_explorer_url, safesigner::{verify_signature, safe_signature_of_message},
@@ -96,4 +95,95 @@ pub async fn run(config: CreateOrder, opts: Opts) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Prompt the user to input a token symbol or address and return the token address
+/// If the user inputs a symbol, we query the token list to get the address
+/// If the user inputs an address, we validate that it is a valid address
+/// If the user inputs an invalid symbol or address, we return an error
+
+pub fn get_token_input() -> Result<Address> {
+    let token = dialoguer::Input::<String>::new()
+        .with_prompt("Token symbol or address")
+        .interact()?;
+
+    Ok(Address::from_str(&token)?)
+}
+
+pub fn get_token(usable_tokens: &OrderTokens, msg: String) -> Result<(H160, ethers::types::U256)> {
+    let token = match usable_tokens {
+        OrderTokens::TokenList(token_list) => {
+            let token_names: Vec<String> = token_list
+                .tokens
+                .iter()
+                .map(|token| format!("{} ({})", token.symbol, token.name))
+                .collect();
+
+            let token = FuzzySelect::with_theme(&ColorfulTheme::default())
+                .with_prompt(format!("{} Token", msg))
+                .items(&token_names)
+                .default(0)
+                .interact()?;
+
+            Address::from_str(&token_list.tokens[token].address).unwrap()
+        }
+        OrderTokens::Custom => {
+            // prompt for custom token and make sure there is no error
+            let mut t = get_token_input();
+
+            loop {
+                if t.is_err() {
+                    println!("Invalid token address");
+                    t = get_token_input();
+                } else {
+                    break;
+                }
+            }
+
+            t.unwrap()
+        }
+    };
+
+    let amount = get_token_amount(&usable_tokens, &token)?;
+    
+    Ok((token, amount))
+}
+
+/// Prompt the user for the amount of the token with decimals and a custom msg
+/// If the user inputs an invalid amount, we return an error
+/// If the user inputs a valid amount, we return the amount in U256
+pub fn get_token_amount(usable_tokens: &OrderTokens, token: &Address) -> Result<U256> {
+    // Get the token record from the token list if it exists
+    let token_record = match usable_tokens {
+        OrderTokens::TokenList(token_list) => token_list
+            .tokens
+            .iter()
+            .find(|t| Address::from_str(&t.address).unwrap() == *token),
+        OrderTokens::Custom => None,
+    };
+
+    // if token_record doesn't exist, set the symbol to the address
+    let binding = token.to_string();
+    let symbol = token_record.map(|token| &token.symbol).unwrap_or(&binding);
+    let decimals = token_record.map(|token| token.decimals).unwrap_or(0);
+
+    let mut amount = dialoguer::Input::<String>::new()
+        .with_prompt(format!("Amount of {symbol}"))
+        .interact()?;
+
+    amount = loop {
+        if amount.is_empty() || !ethers::utils::parse_units(&amount, i32::from(decimals)).is_ok() {
+            println!("Invalid amount");
+            amount = dialoguer::Input::<String>::new()
+                .with_prompt(format!("Amount of {symbol}"))
+                .interact()?;
+            continue;
+        } else {
+            break amount;
+        }
+    };
+
+    let amount = ethers::utils::parse_units(amount, i32::from(decimals))?;
+
+    Ok(amount.into())
 }
