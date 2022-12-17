@@ -3,7 +3,7 @@ use dialoguer::{theme::ColorfulTheme, FuzzySelect, Select};
 use ethers::prelude::*;
 use eyre::Result;
 use reqwest::Client;
-use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc, fmt};
 use token_list::{Token, TokenList};
 
 use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, SellTokenSource};
@@ -65,8 +65,14 @@ where
 
     // if the order is a sell order, we need to invert the token amounts
     let (buy_token_amount, sell_token_amount) = match order_kind {
-        OrderKind::Buy => (token_amount0.clone(), token_amount1.clone()),
-        OrderKind::Sell => (token_amount1.clone(), token_amount0.clone()),
+        OrderKind::Buy => (
+            token_amount0.clone(),
+            token_amount1.clone()
+        ),
+        OrderKind::Sell => (
+            token_amount1.clone(),
+            token_amount0.clone()
+        ),
     };
 
     // output the order details
