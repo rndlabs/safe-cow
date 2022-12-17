@@ -8,6 +8,7 @@ bigdecimal = "0.3"
 chrono = { version = "0.4", default-features = false }
 clap = { version = "4.0.29", features = ["env", "derive"] }
 derivative = "2"
+dialoguer = { version = "0.10.2", features = ["fuzzy-select"] }
 ethers = { version = "1.0.2", features = ["rustls", "eip712"] }
 eyre = "0.6.8"
 hex = { version = "0.4", default-features = false }
@@ -22,4 +23,5 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_with = "2"
 strum = { version = "0.24", features = ["derive"] }
+token-list = { version = "0.6.0", features = ["from-uri"] }
 tokio = { version = "1.23.0", features = ["full"]  }
