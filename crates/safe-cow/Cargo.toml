@@ -1,5 +1,5 @@
 [package]
-name = "safe-signer"
+name = "safe-cow"
 version = "0.1.0"
 authors = ["mfw78 <mfw@rndlabs.xyz>"]
 edition = "2021"
