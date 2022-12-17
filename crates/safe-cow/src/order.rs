@@ -76,13 +76,18 @@ where
         ),
     };
 
+    // TODO: add allowance check for sell token
+    // TODO: add balance check for sell token
+
     // output the order details
     println!(
         "{} {} for {}",
         order_kind,
-        token_amount0.clone(),
-        token_amount1.clone()
+        token_amount0,
+        token_amount1
     );
+
+    // TODO: Put confirmation prompt here
 
     // 1. Create the cowswap order
     let order = OrderBuilder::default()
@@ -116,6 +121,8 @@ where
     let valid = verify_signature(&digest, &signature, &opts).await?;
 
     println!("Signature is valid: {valid:?}");
+
+    // Triple check confirmation here
 
     // 8. Submit the order to the API
     let order = OrderCreation {
