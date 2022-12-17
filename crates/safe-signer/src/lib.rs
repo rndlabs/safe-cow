@@ -244,3 +244,16 @@ pub async fn get_chain_id(rpc_url: &str) -> Result<u64> {
     let chain_id = provider.get_chainid().await?;
     Ok(chain_id.as_u64())
 }
+
+pub trait Invertible {
+    fn invert(&self) -> Self;
+}
+
+impl Invertible for OrderKind {
+    fn invert(&self) -> Self {
+        match self {
+            OrderKind::Buy => OrderKind::Sell,
+            OrderKind::Sell => OrderKind::Buy,
+        }
+    }
+}
