@@ -65,7 +65,7 @@ async fn main() -> Result<(), Error> {
         }
         Commands::SignMessage(message) => {
             // opts.private_keys = prompt_private_keys(&opts.private_keys)?;
-            safesigner::run(message, &opts).await?;
+            safesigner::run(message, &opts, provider).await?;
         }
     }
     Ok(())

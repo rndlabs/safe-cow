@@ -33,7 +33,10 @@ abigen!(
 );
 
 /// Run the sign message command
-pub async fn run(config: SignMessage, opts: &Opts) -> Result<()> {
+pub async fn run<M>(config: SignMessage, opts: &Opts, provider: Arc<Provider<M>>) -> Result<()>
+where
+    M: JsonRpcClient,
+{
     // test if the message is a valid hex string otherwise encode string as bytes
     let message = if config.message.starts_with("0x") {
         hex::decode(&config.message[2..])?
@@ -45,7 +48,7 @@ pub async fn run(config: SignMessage, opts: &Opts) -> Result<()> {
     println!("Message to sign with the safe: {message:#}");
 
     // get the safe signature
-    let (_digest, safe_signature) = safe_signature_of_message(&message, opts).await?;
+    let (_digest, safe_signature) = safe_signature_of_message(&message, opts, provider).await?;
 
     // check if the signature is valid
     let valid = verify_signature(&message, &safe_signature, opts).await?;
@@ -62,11 +65,14 @@ pub async fn run(config: SignMessage, opts: &Opts) -> Result<()> {
     Ok(())
 }
 
-pub async fn safe_signature_of_message(
+pub async fn safe_signature_of_message<M>(
     message: &Bytes,
     opts: &Opts,
-) -> Result<([u8; 32], Vec<u8>)> {
-    let provider = Provider::<Http>::try_from(&opts.rpc_url)?;
+    provider: Arc<Provider<M>>,
+) -> Result<([u8; 32], Vec<u8>)>
+where
+    M: JsonRpcClient,
+{
     let safe_message = SafeMessage {
         message: message.clone(),
     };

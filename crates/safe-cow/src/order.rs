@@ -101,7 +101,7 @@ where
         model::signature::hashed_eip712_message(&domain_separator, &order.data.hash_struct())
             .into();
 
-    let (_safe_msg_digest, signature) = safe_signature_of_message(&digest, &opts).await?;
+    let (_safe_msg_digest, signature) = safe_signature_of_message(&digest, &opts, provider).await?;
 
     let valid = verify_signature(&digest, &signature, &opts).await?;
 
