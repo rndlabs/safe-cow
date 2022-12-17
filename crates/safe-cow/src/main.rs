@@ -57,11 +57,9 @@ async fn main() -> Result<(), Error> {
         Commands::CreateOrder(order) => {
             order::run(order, &opts, provider, chain).await?;
         }
-        Commands::CancelOrder(mut order) => {
-            // not implemented yet
-            unimplemented!();
-            // order.safe.private_keys = prompt_private_keys(order.safe.private_keys)?;
-            // order::cancel(order).await?;
+        // Cancel an order for a safe
+        Commands::CancelOrder(order) => {
+            order::cancel_order(order, &opts, provider, chain).await?;
         }
         Commands::SignMessage(message) => {
             // opts.private_keys = prompt_private_keys(&opts.private_keys)?;
