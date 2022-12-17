@@ -36,31 +36,6 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-/// If a vector of private keys is not provided, prompt the user to enter them
-/// one by one.
-/// 
-/// # Examples
-/// 
-/// ```
-/// use safe_signer::prompt_private_keys;
-/// 
-/// let private_keys = prompt_private_keys().unwrap();
-/// ```
-/// 
-/// # Safety
-/// 
-/// This function is not thread-safe.
-/// 
-fn prompt_private_keys(pks: &Option<Vec<String>>) -> Result<Option<Vec<String>>, Error> {
-    let mut private_keys = pks.clone().unwrap_or_default();
-    
-    if private_keys.is_empty() {
-        private_keys = safe_signer::prompt_private_keys()?
-    }
-
-    Ok(Some(private_keys))
-}
-
 // Prints an ASCII banner
 fn banner() -> () {
     println!(r#"

@@ -114,48 +114,6 @@ pub fn strip_0x_prefix(s: &str) -> Result<String, &'static str> {
     Ok(s.strip_prefix("0x").unwrap_or(s).to_string())
 }
 
-/// Prompt the user for private keys
-pub fn prompt_private_keys() -> Result<Vec<String>> {
-    let mut private_keys = vec![];
-    loop {
-        // Prompt the user for a private key
-        let private_key = rpassword::prompt_password(format!(
-            "Enter private key #{} (leave blank to stop): ",
-            (private_keys.len() + 1)
-        ))?;
-
-        // If the private key is empty, we are done
-        if private_key.is_empty() {
-            break;
-        }
-
-        // Validate the private key
-        if private_key.len() != 64 {
-            println!("Invalid private key length");
-            continue;
-        }
-
-        if let Err(e) = hex::decode(&private_key) {
-            println!("Invalid private key: {e}");
-            continue;
-        }
-
-        // Add the private key to the list
-        private_keys.push(private_key);
-    }
-
-    // sort the private keys by their public key address
-    // signatures are required to be ordered for consideration by the smart contract
-    private_keys.sort_by(|a, b| {
-        let a = SigningKey::from_bytes(&hex::decode(a).unwrap()).unwrap();
-        let a = Wallet::from(a).address();
-        let b = SigningKey::from_bytes(&hex::decode(b).unwrap()).unwrap();
-        let b = Wallet::from(b).address();
-        a.cmp(&b)
-    });
-    Ok(private_keys)
-}
-
 /// Supported chains
 pub enum SupportedChains {
     Mainnet,
