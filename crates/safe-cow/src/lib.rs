@@ -1,3 +1,5 @@
+#![feature(is_some_and)]
+
 use clap::{Args, Parser, Subcommand};
 use ethers::prelude::*;
 use eyre::Result;
