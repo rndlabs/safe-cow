@@ -659,6 +659,16 @@ pub enum OrderKind {
     Sell,
 }
 
+/// implement formatting for order kind
+impl Display for OrderKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderKind::Buy => write!(f, "Buy"),
+            OrderKind::Sell => write!(f, "Sell"),
+        }
+    }
+}
+
 #[derive(
     Eq,
     PartialEq,
