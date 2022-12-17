@@ -122,6 +122,19 @@ pub enum SupportedChains {
 
 /// Utility functions for SupportedChains
 impl SupportedChains {
+    pub async fn get_chain<M>(provider: Arc<Provider<M>>) -> Result<SupportedChains>
+    where
+        M: JsonRpcClient,
+    {
+        match provider.get_chainid().await {
+            Ok(chain_id) => match SupportedChains::get_by_chain_id(chain_id.as_u64()) {
+                Some(chain) => Ok(chain),
+                None => panic!("Unsupported chain ID: {}", chain_id),
+            },
+            Err(_) => panic!("Failed to get chain ID"),
+        }
+    }
+
     pub fn get_chain_id(&self) -> u64 {
         match self {
             SupportedChains::Mainnet => 1,
