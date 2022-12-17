@@ -167,6 +167,22 @@ impl SupportedChains {
             SupportedChains::Gnosis => "xdai".to_string(),
         }
     }
+
+    pub async fn get_token_list(&self) -> Result<TokenList> {
+        print!("Fetching token list for {}...", self.get_name());
+
+        let result = match self {
+            SupportedChains::Mainnet => {
+                TokenList::from_uri("https://files.cow.fi/tokens/CoinGecko.json").await?
+            }
+            SupportedChains::Goerli => TokenList::from_uri("https://raw.githubusercontent.com/cowprotocol/cowswap/main/src/custom/tokens/goerli-token-list.json").await?,
+            SupportedChains::Gnosis => TokenList::from_uri("https://tokens.honeyswap.org/").await?,
+        };
+
+        println!("{} tokens found", result.tokens.len());
+
+        Ok(result)
+    }
 }
 
 // Get the Cowswap API URL for a given chain and if it is a staging environment
