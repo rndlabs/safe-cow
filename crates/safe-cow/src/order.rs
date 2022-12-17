@@ -145,10 +145,18 @@ where
     Ok(())
 }
 
-/// Prompt the user to input a token symbol or address and return the token address
-/// If the user inputs a symbol, we query the token list to get the address
-/// If the user inputs an address, we validate that it is a valid address
-/// If the user inputs an invalid symbol or address, we return an error
+/// Cancel an order by its ID
+pub async fn cancel_order<M>(
+    config: CancelOrder,
+    opts: &Opts,
+    provider: Arc<Provider<M>>,
+    chain: SupportedChains,
+) -> Result<()>
+where
+    M: JsonRpcClient + Send + Sync + 'static,
+{
+    unimplemented!()
+}
 
 /// An analogue for the similar CurrencyAmount popularised by Uniswap's sdk-core.
 #[derive(Clone)]
