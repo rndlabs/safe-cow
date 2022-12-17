@@ -5,7 +5,7 @@ use clap::Parser;
 
 use ethers::prelude::*;
 
-use safe_signer::{order, Commands, Opts, safesigner};
+use safe_signer::{order, Commands, Opts, safesigner::{self, verify_is_safe}, SupportedChains};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -18,11 +18,31 @@ async fn main() -> Result<(), Error> {
     let provider = Arc::new(Provider::<Http>::try_from(&opts.rpc_url)?);
     let chain = SupportedChains::get_chain(provider.clone()).await?;
 
+    println!("Connected to chain: {} ({})", chain.get_name(), opts.rpc_url);
 
-    // determine the name of chain the RPC is connected to
-    let chain_id = provider.get_chainid().await?;
+    // check if the safe address is valid
+    let is_valid = verify_is_safe(*opts.safe.as_address().unwrap(), provider.clone()).await;
+    match is_valid {
+        Ok(is_valid) => {
+            if !is_valid {
+                println!("Safe address is invalid");
+                return Ok(());
+            } else {
+                println!("Transacting with safe: {}", *opts.safe.as_address().unwrap());
+            }
+        }
+        Err(e) => {
+            println!("Safe address is invalid: {}", e);
+            return Ok(());
+        }
+    }
 
-    match opts.subcommand {
+    // print a space
+    println!("");
+
+    let subcommand = opts.subcommand.clone();
+
+    match subcommand {
         Commands::CreateOrder(order) => {
             order::run(order, &opts, provider, chain).await?;
         }
