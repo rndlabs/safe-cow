@@ -41,36 +41,30 @@ pub struct CreateOrder {
         value_parser = parse_name_or_address,
         value_name = "BUY_TOKEN"
     )]
-    pub buy_token: NameOrAddress,
-    #[clap(
-        help = "The amount of buy token to buy",
-        value_name = "BUY_AMOUNT",
-    )]
-    pub buy_amount: String,
+    pub buy_token: Option<NameOrAddress>,
+    #[clap(help = "The amount of buy token to buy", value_name = "BUY_AMOUNT")]
+    pub buy_amount: Option<String>,
     #[clap(
         help = "The address of the token to sell",
         value_parser = parse_name_or_address,
         value_name = "SELL_TOKEN",
     )]
-    pub sell_token: NameOrAddress,
-    #[clap(
-        help = "The amount of sell token to sell",
-        value_name = "SELL_AMOUNT",
-    )]
-    pub sell_amount: String,
+    pub sell_token: Option<NameOrAddress>,
+    #[clap(help = "The amount of sell token to sell", value_name = "SELL_AMOUNT")]
+    pub sell_amount: Option<String>,
     #[clap(
         help = "How long the order is valid for in seconds",
         value_parser,
         value_name = "VALID_TO",
-        default_value = "1200",
+        default_value = "1200"
     )]
     pub valid_to: Option<u32>,
     #[clap(
         help = "Use the Cowswap staging environment?",
         value_name = "STAGING",
-        default_value = "true",
+        default_value = "true"
     )]
-    pub staging: Option<bool>
+    pub staging: Option<bool>,
 }
 
 
