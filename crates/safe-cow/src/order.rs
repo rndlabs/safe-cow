@@ -1,32 +1,38 @@
+use async_trait::async_trait;
 use dialoguer::{theme::ColorfulTheme, FuzzySelect, Select};
 use ethers::prelude::*;
 use eyre::Result;
 use reqwest::Client;
-use std::{str::FromStr, sync::Arc};
-use token_list::TokenList;
+use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
+use token_list::{Token, TokenList};
+
+use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, SellTokenSource};
 
 use crate::{
     get_cowswap_api_url, get_cowswap_explorer_url,
     safesigner::{safe_signature_of_message, verify_signature},
-    CreateOrder, Invertible, Opts, SettlementContract, SupportedChains,
+    CancelOrder, CreateOrder, Invertible, Opts, SettlementContract, SupportedChains,
 };
 
-use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, SellTokenSource};
+abigen!(
+    ERC20,
+    "./abi/ERC20.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
 
 pub enum OrderTokens {
     TokenList(TokenList),
     Custom,
 }
-
-/// Run the sign order command
-pub async fn run<M>(
+/// Create a new order
+pub async fn create_order<M>(
     config: CreateOrder,
     opts: &Opts,
     provider: Arc<Provider<M>>,
     chain: SupportedChains,
 ) -> Result<()>
 where
-    M: JsonRpcClient,
+    M: JsonRpcClient + Send + Sync + 'static,
 {
     // set order_tokens to TokenList or Custom depending on the user's choice
     let usable_tokens = match dialoguer::Confirm::new()
@@ -47,39 +53,36 @@ where
         .interact()?;
     let order_kind = order_kinds[order_kind];
 
-    let (token_0_address, token_0_amount) = get_token(&usable_tokens, order_kind.to_string())?;
+    let token_amount0 =
+        get_token_amount(&usable_tokens, order_kind.to_string(), provider.clone()).await?;
 
-    let (token_1_address, token_1_amount) =
-        get_token(&usable_tokens, order_kind.invert().to_string())?;
+    let token_amount1 = get_token_amount(
+        &usable_tokens,
+        order_kind.invert().to_string(),
+        provider.clone(),
+    )
+    .await?;
 
     // if the order is a sell order, we need to invert the token amounts
-    let (buy_token, buy_amount, sell_token, sell_amount) = match order_kind {
-        OrderKind::Buy => (
-            token_0_address,
-            token_0_amount,
-            token_1_address,
-            token_1_amount,
-        ),
-        OrderKind::Sell => (
-            token_1_address,
-            token_1_amount,
-            token_0_address,
-            token_0_amount,
-        ),
+    let (buy_token_amount, sell_token_amount) = match order_kind {
+        OrderKind::Buy => (token_amount0.clone(), token_amount1.clone()),
+        OrderKind::Sell => (token_amount1.clone(), token_amount0.clone()),
     };
 
     // output the order details
     println!(
-        "{} {} {} for {} {}",
-        order_kind, token_0_amount, token_0_address, token_1_amount, token_1_address,
+        "{} {} for {}",
+        order_kind,
+        token_amount0.clone(),
+        token_amount1.clone()
     );
 
     // 1. Create the cowswap order
     let order = OrderBuilder::default()
-        .with_buy_token(buy_token)
-        .with_buy_amount(buy_amount)
-        .with_sell_token(sell_token)
-        .with_sell_amount(sell_amount)
+        .with_buy_token(buy_token_amount.into_address())
+        .with_buy_amount(buy_token_amount.amount)
+        .with_sell_token(sell_token_amount.into_address())
+        .with_sell_amount(sell_token_amount.amount)
         // make order valid to current time + 20 minutes
         .with_valid_to(chrono::Utc::now().timestamp() as u32 + config.valid_to.unwrap_or(1200))
         // by setting fee amount to 0, we default to limit orders
@@ -147,6 +150,117 @@ where
 /// If the user inputs an address, we validate that it is a valid address
 /// If the user inputs an invalid symbol or address, we return an error
 
+/// An analogue for the similar CurrencyAmount popularised by Uniswap's sdk-core.
+#[derive(Clone)]
+pub struct TokenAmount {
+    pub token: Token,
+    pub amount: U256,
+}
+
+impl TokenAmount {
+    pub fn new(token: Token, amount: U256) -> Self {
+        Self { token, amount }
+    }
+}
+
+impl fmt::Display for TokenAmount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.amount, self.token.symbol)
+    }
+}
+
+pub trait FromTokenList {
+    fn from_list_with_prompt(token_list: &TokenList, msg: String) -> Result<Self>
+    where
+        Self: Sized;
+}
+
+impl FromTokenList for Token {
+    fn from_list_with_prompt(token_list: &TokenList, msg: String) -> Result<Self> {
+        let token_names = token_list
+            .tokens
+            .iter()
+            .map(|token| format!("{} ({})", token.symbol, token.name))
+            .collect::<Vec<_>>();
+
+        let token = FuzzySelect::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!("{} Token", msg))
+            .items(&token_names)
+            .default(0)
+            .interact()?;
+
+        Ok(token_list.tokens[token].clone())
+    }
+}
+
+/// A trait for retrieving an object from the chain by address.
+#[async_trait]
+pub trait FromChain {
+    async fn from_address<M>(address: H160, provider: Arc<Provider<M>>) -> Result<Self>
+    where
+        Self: Sized,
+        M: JsonRpcClient + Send + Sync + 'static;
+}
+
+/// Retrieve a token from the chain by address.
+#[async_trait]
+impl FromChain for Token {
+    async fn from_address<M>(address: H160, provider: Arc<Provider<M>>) -> Result<Self>
+    where
+        M: JsonRpcClient + Send + Sync + 'static,
+    {
+        let contract = ERC20::new(address, provider.clone());
+
+        let name_call = contract.name();
+        let symbol_call = contract.symbol();
+        let decimals_call = contract.decimals();
+
+        let mut multicall = Multicall::new(provider.clone(), None)
+            .await?
+            .version(MulticallVersion::Multicall3);
+        multicall
+            .add_call(name_call, false)
+            .add_call(symbol_call, false)
+            .add_call(decimals_call, false);
+
+        let (name, symbol, decimals): ((bool, String), (bool, String), (bool, U256)) =
+            multicall.call().await?;
+
+        Ok(Token {
+            chain_id: provider.get_chainid().await?.as_u32(),
+            name: name.1,
+            symbol: symbol.1,
+            decimals: decimals.1.as_u32().try_into()?,
+            address: Bytes::from(address.as_bytes().to_vec()).to_string(),
+            logo_uri: None,
+            tags: Vec::new(),
+            extensions: HashMap::new(),
+        })
+    }
+}
+
+// Define a trait to convert a token to an address
+pub trait IntoAddress {
+    fn into_address(&self) -> Address;
+}
+
+impl IntoAddress for Token {
+    fn into_address(&self) -> Address {
+        Address::from_str(&self.address).unwrap()
+    }
+}
+
+impl IntoAddress for TokenAmount {
+    fn into_address(&self) -> Address {
+        self.token.into_address()
+    }
+}
+
+/// Prompt the user to input a token symbol or address and return the token address
+/// If the user inputs a symbol, we query the token list to get the address
+/// If the user inputs an address, we validate that it is a valid address
+/// If the user inputs an invalid symbol or address, we return an error
+
 pub fn get_token_input() -> Result<Address> {
     let token = dialoguer::Input::<String>::new()
         .with_prompt("Token symbol or address")
@@ -155,23 +269,16 @@ pub fn get_token_input() -> Result<Address> {
     Ok(Address::from_str(&token)?)
 }
 
-pub fn get_token(usable_tokens: &OrderTokens, msg: String) -> Result<(H160, ethers::types::U256)> {
+pub async fn get_token_amount<M>(
+    usable_tokens: &OrderTokens,
+    msg: String,
+    provider: Arc<Provider<M>>,
+) -> Result<TokenAmount>
+where
+    M: JsonRpcClient + Send + Sync + 'static,
+{
     let token = match usable_tokens {
-        OrderTokens::TokenList(token_list) => {
-            let token_names: Vec<String> = token_list
-                .tokens
-                .iter()
-                .map(|token| format!("{} ({})", token.symbol, token.name))
-                .collect();
-
-            let token = FuzzySelect::with_theme(&ColorfulTheme::default())
-                .with_prompt(format!("{} Token", msg))
-                .items(&token_names)
-                .default(0)
-                .interact()?;
-
-            Address::from_str(&token_list.tokens[token].address).unwrap()
-        }
+        OrderTokens::TokenList(token_list) => Token::from_list_with_prompt(token_list, msg)?,
         OrderTokens::Custom => {
             // prompt for custom token and make sure there is no error
             let mut t = get_token_input();
@@ -185,50 +292,36 @@ pub fn get_token(usable_tokens: &OrderTokens, msg: String) -> Result<(H160, ethe
                 }
             }
 
-            t.unwrap()
+            Token::from_address(t?, provider).await?
         }
     };
 
-    let amount = get_token_amount(&usable_tokens, &token)?;
+    let amount = get_amount(&token);
 
-    Ok((token, amount))
+    Ok(TokenAmount::new(token, amount))
 }
 
-/// Prompt the user for the amount of the token with decimals and a custom msg
-/// If the user inputs an invalid amount, we return an error
-/// If the user inputs a valid amount, we return the amount in U256
-pub fn get_token_amount(usable_tokens: &OrderTokens, token: &Address) -> Result<U256> {
-    // Get the token record from the token list if it exists
-    let token_record = match usable_tokens {
-        OrderTokens::TokenList(token_list) => token_list
-            .tokens
-            .iter()
-            .find(|t| Address::from_str(&t.address).unwrap() == *token),
-        OrderTokens::Custom => None,
-    };
-
-    // if token_record doesn't exist, set the symbol to the address
-    let binding = token.to_string();
-    let symbol = token_record.map(|token| &token.symbol).unwrap_or(&binding);
-    let decimals = token_record.map(|token| token.decimals).unwrap_or(0);
-
+/// Prompt the user to input a token amount. Enforce that the amount is valid.
+pub fn get_amount(token: &Token) -> U256 {
     let mut amount = dialoguer::Input::<String>::new()
-        .with_prompt(format!("Amount of {symbol}"))
-        .interact()?;
+        .with_prompt(format!("Amount of {}", token.symbol))
+        .interact();
 
     amount = loop {
-        if amount.is_empty() || !ethers::utils::parse_units(&amount, i32::from(decimals)).is_ok() {
+        if amount.as_ref().is_ok_and(|x| {
+            x.is_empty() || !ethers::utils::parse_units(&x, i32::from(token.decimals)).is_ok()
+        }) {
             println!("Invalid amount");
             amount = dialoguer::Input::<String>::new()
-                .with_prompt(format!("Amount of {symbol}"))
-                .interact()?;
+                .with_prompt(format!("Amount of {}", token.symbol))
+                .interact();
             continue;
         } else {
             break amount;
         }
     };
 
-    let amount = ethers::utils::parse_units(amount, i32::from(decimals))?;
-
-    Ok(amount.into())
+    ethers::utils::parse_units(amount.unwrap(), i32::from(token.decimals))
+        .unwrap()
+        .into()
 }
