@@ -6,9 +6,11 @@ use eyre::Error;
 use ethers::prelude::*;
 
 use safe_cow::{
+    Opts,
+    Commands,
+    SupportedChains,
     order,
-    safesigner::{self, verify_is_safe},
-    Commands, Opts, SupportedChains,
+    safesigner,
 };
 
 #[tokio::main]
@@ -18,7 +20,7 @@ async fn main() -> Result<(), Error> {
     // parse the command line options
     let opts = Opts::parse();
 
-    // connect to the RPC
+    // connect to the RPC for re-use
     let provider = Arc::new(Provider::<Http>::try_from(&opts.rpc_url)?);
     let chain = SupportedChains::get_chain(provider.clone()).await?;
 
@@ -29,7 +31,7 @@ async fn main() -> Result<(), Error> {
     );
 
     // check if the safe address is valid
-    let is_valid = verify_is_safe(*opts.safe.as_address().unwrap(), provider.clone()).await;
+    let is_valid = safesigner::verify_is_safe(*opts.safe.as_address().unwrap(), provider.clone()).await;
     match is_valid {
         Ok(is_valid) => {
             if !is_valid {
@@ -48,28 +50,30 @@ async fn main() -> Result<(), Error> {
         }
     }
 
-    // print a space
-    println!("");
+    // separator
+    println!();
 
     let subcommand = opts.subcommand.clone();
 
+    // run the subcommand
     match subcommand {
+        // Create an order for a safe
         Commands::CreateOrder(order) => {
-            order::run(order, &opts, provider, chain).await?;
+            order::create_order(order, &opts, provider, chain).await?;
         }
         // Cancel an order for a safe
         Commands::CancelOrder(order) => {
             order::cancel_order(order, &opts, provider, chain).await?;
         }
+        // Sign a message with a safe
         Commands::SignMessage(message) => {
-            // opts.private_keys = prompt_private_keys(&opts.private_keys)?;
             safesigner::run(message, &opts, provider).await?;
         }
     }
     Ok(())
 }
 
-// Prints an ASCII banner
+/// Prints the banner
 fn banner() -> () {
     println!(
         r#"
