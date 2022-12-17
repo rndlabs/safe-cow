@@ -1,14 +1,14 @@
+use dialoguer::{theme::ColorfulTheme, FuzzySelect, Select};
+use ethers::prelude::*;
 use eyre::Result;
 use reqwest::Client;
-use ethers::prelude::*;
 use std::{str::FromStr, sync::Arc};
-use dialoguer::{theme::ColorfulTheme, FuzzySelect, Select};
 use token_list::TokenList;
 
 use crate::{
     get_cowswap_api_url, get_cowswap_explorer_url,
     safesigner::{safe_signature_of_message, verify_signature},
-    CreateOrder, Opts, SettlementContract, SupportedChains, Invertible,
+    CreateOrder, Invertible, Opts, SettlementContract, SupportedChains,
 };
 
 use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, SellTokenSource};
@@ -190,7 +190,7 @@ pub fn get_token(usable_tokens: &OrderTokens, msg: String) -> Result<(H160, ethe
     };
 
     let amount = get_token_amount(&usable_tokens, &token)?;
-    
+
     Ok((token, amount))
 }
 

@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
-use eyre::Error;
 use clap::Parser;
+use eyre::Error;
 
 use ethers::prelude::*;
 
-use safe_signer::{order, Commands, Opts, safesigner::{self, verify_is_safe}, SupportedChains};
+use safe_cow::{
+    order,
+    safesigner::{self, verify_is_safe},
+    Commands, Opts, SupportedChains,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -14,11 +18,15 @@ async fn main() -> Result<(), Error> {
     // parse the command line options
     let opts = Opts::parse();
 
-    // connect to the RPC    
+    // connect to the RPC
     let provider = Arc::new(Provider::<Http>::try_from(&opts.rpc_url)?);
     let chain = SupportedChains::get_chain(provider.clone()).await?;
 
-    println!("Connected to chain: {} ({})", chain.get_name(), opts.rpc_url);
+    println!(
+        "Connected to chain: {} ({})",
+        chain.get_name(),
+        opts.rpc_url
+    );
 
     // check if the safe address is valid
     let is_valid = verify_is_safe(*opts.safe.as_address().unwrap(), provider.clone()).await;
@@ -28,7 +36,10 @@ async fn main() -> Result<(), Error> {
                 println!("Safe address is invalid");
                 return Ok(());
             } else {
-                println!("Transacting with safe: {}", *opts.safe.as_address().unwrap());
+                println!(
+                    "Transacting with safe: {}",
+                    *opts.safe.as_address().unwrap()
+                );
             }
         }
         Err(e) => {
@@ -62,7 +73,8 @@ async fn main() -> Result<(), Error> {
 
 // Prints an ASCII banner
 fn banner() -> () {
-    println!(r#"
+    println!(
+        r#"
              /( ,,,,, )\
             _\,;;;;;;;,/_
          .-"; ;;;;;;;;; ;"-.
@@ -84,5 +96,6 @@ fn banner() -> () {
       ##V|   |_/`"""`\_|   |V##
 jgs      ##V##         ##V##
 
-"#)
+"#
+    )
 }

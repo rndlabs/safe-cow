@@ -3,20 +3,20 @@ use std::sync::Arc;
 use eyre::Result;
 
 use ethers::{
-    prelude::*,
-    types::transaction::eip712::{Eip712, EIP712WithDomain, EIP712Domain}
+    abi::Address,
+    prelude::{k256::ecdsa::SigningKey, *},
+    types::transaction::eip712::{EIP712Domain, EIP712WithDomain, Eip712},
 };
 
-use crate::{SignMessage, Opts};
+use crate::{Opts, SignMessage};
 // const MAGIC_NUMBER: [u8; 4] = [0x16, 0x26, 0xba, 0x7e];
 const MAGIC_NUMBER: [u8; 4] = [0x20, 0xc1, 0x3b, 0x0b];
-
 
 // The EIP-712 struct definition for a Safe Message
 #[derive(Eip712, EthAbiType, Clone)]
 #[eip712()]
 pub struct SafeMessage {
-    message: Bytes
+    message: Bytes,
 }
 
 // Generate the type-safe contract bindings for the EIP-1271 interface
@@ -45,17 +45,10 @@ pub async fn run(config: SignMessage, opts: &Opts) -> Result<()> {
     println!("Message to sign with the safe: {message:#}");
 
     // get the safe signature
-    let (digest, safe_signature) = safe_signature_of_message(
-        &message,
-        opts
-    ).await?;
+    let (_digest, safe_signature) = safe_signature_of_message(&message, opts).await?;
 
     // check if the signature is valid
-    let valid = verify_signature(
-        &message,
-        &safe_signature,
-        opts
-    ).await?;
+    let valid = verify_signature(&message, &safe_signature, opts).await?;
 
     // print the signature
     println!("Signature: 0x{}", hex::encode(safe_signature));
@@ -74,7 +67,9 @@ pub async fn safe_signature_of_message(
     opts: &Opts,
 ) -> Result<([u8; 32], Vec<u8>)> {
     let provider = Provider::<Http>::try_from(&opts.rpc_url)?;
-    let safe_message = SafeMessage { message: message.clone() };
+    let safe_message = SafeMessage {
+        message: message.clone(),
+    };
     let safe_message = EIP712WithDomain::new(safe_message)?.set_domain(EIP712Domain {
         name: None,
         version: None,
@@ -105,13 +100,10 @@ pub async fn safe_signature_of_message(
 
 /// Verify the signature of a hash against a contract that implements the
 /// EIP-1271 interface.
-pub async fn verify_signature(
-    data: &Bytes,
-    signature: &Vec<u8>,
-    opts: &Opts,
-) -> Result<bool> {
+pub async fn verify_signature(data: &Bytes, signature: &Vec<u8>, opts: &Opts) -> Result<bool> {
     let provider = Provider::<Http>::try_from(opts.rpc_url.as_str())?;
-    let contract = ERC1271SignatureValidator::new(*opts.safe.as_address().unwrap(), provider.into());
+    let contract =
+        ERC1271SignatureValidator::new(*opts.safe.as_address().unwrap(), provider.into());
 
     // convert digest to bytes32 for the contract call
     let eip1271_result: [u8; 4] = contract
@@ -124,11 +116,10 @@ pub async fn verify_signature(
 }
 
 /// Verify with a high certainty that the address is a Safe contract
-pub async fn verify_is_safe<M>(
-    safe: Address,
-    provider: Arc<Provider<M>>,
-) -> Result<bool> 
-where M: JsonRpcClient + 'static {
+pub async fn verify_is_safe<M>(safe: Address, provider: Arc<Provider<M>>) -> Result<bool>
+where
+    M: JsonRpcClient + 'static,
+{
     let contract = GnosisSafe::new(safe, provider.clone());
 
     // check that the version = 1.3.0 and the threshold is 1 or greater
