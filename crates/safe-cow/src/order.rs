@@ -54,6 +54,7 @@ where
         .interact()?;
     let order_kind = order_kinds[order_kind];
 
+    // Get the respective tokens annd amounts for the swap
     let token_amount0 =
         get_token_amount(&usable_tokens, order_kind.to_string(), provider.clone(), &opts).await?;
 
@@ -77,6 +78,9 @@ where
         ),
     };
 
+    // print a blank line for readability
+    println!();
+
     // TODO: add allowance check for sell token
     // TODO: add balance check for sell token
 
@@ -90,6 +94,9 @@ where
     } else {
         println!("Creating order...");
     }
+
+    // print a blank line for readability
+    println!();
 
     // if the prompt private keys fails, the user has cancelled the order
     if !safe.prompt_private_keys().is_ok() {
@@ -128,9 +135,25 @@ where
 
     let valid = safe.verify_signature(&digest, &signature).await?;
 
-    println!("Signature is valid: {valid:?}");
+    // if the signature is invalid, we should exit
+    if !valid {
+        println!("Signature is invalid");
+        return Ok(());
+    }
+
+    // print a blank line for readability
+    println!();
 
     // Triple check confirmation here
+    if !dialoguer::Confirm::new()
+        .with_prompt("Are you sure you want to submit this order?")
+        .interact()?
+    {
+        println!("Order creation cancelled");
+        return Ok(());
+    } else {
+        print!("Submitting order...");
+    }
 
     // 8. Submit the order to the API
     let order = OrderCreation {
@@ -145,7 +168,6 @@ where
         "{}/orders",
         get_cowswap_api_url(&chain, config.staging.unwrap_or(false))
     );
-    println!("API URL: {url}");
     let response = client.post(&url).json(&order).send().await?;
 
     if !response.status().is_success() {
@@ -292,14 +314,12 @@ impl IntoAddress for TokenAmount {
     }
 }
 
-/// Prompt the user to input a token symbol or address and return the token address
-/// If the user inputs a symbol, we query the token list to get the address
+/// Prompt the user to input a token address and return the token
 /// If the user inputs an address, we validate that it is a valid address
 /// If the user inputs an invalid symbol or address, we return an error
-
 pub fn get_token_input() -> Result<Address> {
     let token = dialoguer::Input::<String>::new()
-        .with_prompt("Token symbol or address")
+        .with_prompt("ERC20 Token address")
         .interact()?;
 
     Ok(Address::from_str(&token)?)

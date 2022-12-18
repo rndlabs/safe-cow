@@ -89,11 +89,14 @@ impl Safe {
             return Err(eyre::eyre!("No owners provided"));
         }
 
+        // print a blank line
+        println!("Enter private keys for Safe owners:");
+
         let mut private_keys = vec![];
         loop {
             // Prompt the user for a private key
             let private_key = rpassword::prompt_password(format!(
-                "Enter private key #{} / {} ({} total owners): ",
+                "Private key #{} / {} ({} total owners): ",
                 (private_keys.len() + 1),
                 self.threshold,
                 self.owners.len()
