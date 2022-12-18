@@ -11,7 +11,7 @@ use safe_cow::{
     SupportedChains,
     safe,
     order,
-    safesigner,
+    sign,
 };
 
 #[tokio::main]

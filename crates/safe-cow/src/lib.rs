@@ -9,6 +9,7 @@ use model::order::OrderKind;
 use token_list::TokenList;
 
 pub mod order;
+pub mod sign;
 pub mod safe;
 
 #[derive(Subcommand, Debug, Clone)]
