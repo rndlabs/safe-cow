@@ -9,6 +9,7 @@ use safe_cow::{
     Opts,
     Commands,
     SupportedChains,
+    safe,
     order,
     safesigner,
 };
@@ -30,25 +31,9 @@ async fn main() -> Result<(), Error> {
         opts.rpc_url
     );
 
-    // check if the safe address is valid
-    let is_valid = safesigner::verify_is_safe(*opts.safe.as_address().unwrap(), provider.clone()).await;
-    match is_valid {
-        Ok(is_valid) => {
-            if !is_valid {
-                println!("Safe address is invalid");
-                return Ok(());
-            } else {
-                println!(
-                    "Transacting with safe: {}",
-                    *opts.safe.as_address().unwrap()
-                );
-            }
-        }
-        Err(e) => {
-            println!("Safe address is invalid: {}", e);
-            return Ok(());
-        }
-    }
+    // connect to the safe
+    let mut safe = safe::Safe::new(&opts).await?;
+    println!("Connected to safe: {}", safe.address);
 
     // separator
     println!();
@@ -59,15 +44,15 @@ async fn main() -> Result<(), Error> {
     match subcommand {
         // Create an order for a safe
         Commands::CreateOrder(order) => {
-            order::create_order(order, &opts, provider, chain).await?;
+            order::create_order(order, &opts, &mut safe, provider, chain).await?;
         }
         // Cancel an order for a safe
         Commands::CancelOrder(order) => {
-            order::cancel_order(order, &opts, provider, chain).await?;
+            order::cancel_order(order, &opts, &mut safe, provider, chain).await?;
         }
         // Sign a message with a safe
         Commands::SignMessage(message) => {
-            safesigner::run(message, &opts, provider).await?;
+            sign::run(message, &mut safe).await?;
         }
     }
     Ok(())

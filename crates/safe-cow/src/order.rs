@@ -10,7 +10,7 @@ use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, 
 
 use crate::{
     get_cowswap_api_url, get_cowswap_explorer_url,
-    safesigner::{safe_signature_of_message, verify_signature},
+    safe::Safe,
     CancelOrder, CreateOrder, Invertible, Opts, SettlementContract, SupportedChains,
 };
 
@@ -28,6 +28,7 @@ pub enum OrderTokens {
 pub async fn create_order<M>(
     config: CreateOrder,
     opts: &Opts,
+    safe: &mut Safe,
     provider: Arc<Provider<M>>,
     chain: SupportedChains,
 ) -> Result<()>
@@ -87,7 +88,11 @@ where
         token_amount1
     );
 
-    // TODO: Put confirmation prompt here
+    // if the prompt private keys fails, the user has cancelled the order
+    if !safe.prompt_private_keys().is_ok() {
+        println!("Order creation cancelled");
+        return Ok(());
+    }
 
     // 1. Create the cowswap order
     let order = OrderBuilder::default()
@@ -116,9 +121,9 @@ where
         model::signature::hashed_eip712_message(&domain_separator, &order.data.hash_struct())
             .into();
 
-    let (_safe_msg_digest, signature) = safe_signature_of_message(&digest, &opts, provider).await?;
+    let (_safe_msg_digest, signature) = safe.sign(&digest).await?;
 
-    let valid = verify_signature(&digest, &signature, &opts).await?;
+    let valid = safe.verify_signature(&digest, &signature).await?;
 
     println!("Signature is valid: {valid:?}");
 
@@ -163,6 +168,7 @@ where
 pub async fn cancel_order<M>(
     config: CancelOrder,
     opts: &Opts,
+    safe: &Safe,
     provider: Arc<Provider<M>>,
     chain: SupportedChains,
 ) -> Result<()>

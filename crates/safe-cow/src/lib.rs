@@ -9,7 +9,7 @@ use model::order::OrderKind;
 use token_list::TokenList;
 
 pub mod order;
-pub mod safesigner;
+pub mod safe;
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
