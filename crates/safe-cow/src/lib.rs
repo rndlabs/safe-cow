@@ -3,7 +3,8 @@
 use clap::{Args, Parser, Subcommand};
 use ethers::prelude::*;
 use eyre::Result;
-use std::sync::Arc;
+use serde::{Serialize, Deserialize};
+use std::{sync::Arc, fmt};
 
 use model::order::OrderKind;
 use token_list::TokenList;
@@ -259,5 +260,18 @@ impl Invertible for OrderKind {
             OrderKind::Buy => OrderKind::Sell,
             OrderKind::Sell => OrderKind::Buy,
         }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CowswapApiError {
+    #[serde(rename = "errorType")]
+    pub error_type: String,
+    pub description: String,
+}
+
+impl fmt::Display for CowswapApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.error_type, self.description)
     }
 }

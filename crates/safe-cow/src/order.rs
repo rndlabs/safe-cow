@@ -11,7 +11,7 @@ use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, 
 use crate::{
     get_cowswap_api_url, get_cowswap_explorer_url,
     safe::Safe,
-    CancelOrder, CreateOrder, Invertible, Opts, SettlementContract, SupportedChains,
+    CancelOrder, CreateOrder, Invertible, Opts, SettlementContract, SupportedChains, CowswapApiError,
 };
 
 abigen!(
@@ -149,7 +149,9 @@ where
     let response = client.post(&url).json(&order).send().await?;
 
     if !response.status().is_success() {
-        println!("Error: {:?}", response.text().await?);
+        // decode the error message from the response
+        let error: CowswapApiError = response.json().await?;
+        println!("Error: {error}");
         return Ok(());
     } else {
         println!("Order submitted successfully");
