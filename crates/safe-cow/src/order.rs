@@ -80,13 +80,16 @@ where
     // TODO: add allowance check for sell token
     // TODO: add balance check for sell token
 
-    // output the order details
-    println!(
-        "{} {} for {}",
-        order_kind,
-        token_amount0,
-        token_amount1
-    );
+    // confirm the order
+    if !dialoguer::Confirm::new()
+        .with_prompt(format!("Confirm {} {} for {}?", order_kind, token_amount0, token_amount1))
+        .interact()?
+    {
+        println!("Order creation cancelled");
+        return Ok(());
+    } else {
+        println!("Creating order...");
+    }
 
     // if the prompt private keys fails, the user has cancelled the order
     if !safe.prompt_private_keys().is_ok() {
