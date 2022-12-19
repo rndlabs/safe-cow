@@ -9,9 +9,8 @@ use token_list::{Token, TokenList};
 use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, SellTokenSource};
 
 use crate::{
-    get_cowswap_api_url, get_cowswap_explorer_url,
-    safe::Safe,
-    CancelOrder, CreateOrder, Invertible, Opts, SettlementContract, SupportedChains, CowswapApiError,
+    get_cowswap_api_url, get_cowswap_explorer_url, safe::Safe, CancelOrder, CowswapApiError,
+    CreateOrder, Invertible, Opts, SettlementContract, SupportedChains, VaultRelayerContract,
 };
 
 abigen!(
@@ -81,12 +80,57 @@ where
     // print a blank line for readability
     println!();
 
-    // TODO: add allowance check for sell token
-    // TODO: add balance check for sell token
+    // check that the user has enough balance for the sell token
+    if !safe.has_min_balance(&sell_token_amount).await? {
+        println!("You don't have enough balance for this order");
+        return Ok(());
+    }
+
+    // check that the vaultrelayer has enough allowance for the sell token
+    let vault_relayer = VaultRelayerContract::get_by_chain(&chain).get_address();
+    let do_approve_tx = !safe
+        .has_min_approval(
+            &sell_token_amount,
+            vault_relayer,
+        )
+        .await?;
+
+    if do_approve_tx && safe.has_pending_txs().await? {
+        println!("You have pending transactions in the Safe API. Please execute these first.");
+        println!("{}{}{}", safe.get_safe_app_url().await?, Bytes::from(safe.address.to_fixed_bytes()), "/transactions/queue");
+        return Ok(());
+    }
+
+    // if the user doesn't have enough allowance, prompt them to approve the vault relayer
+    if do_approve_tx {
+        // prompt the user to approve the vault relayer
+        if dialoguer::Confirm::new()
+            .with_prompt(format!(
+                "Approve the GPv2VaultRelayer for {}?",
+                &sell_token_amount
+            ))
+            .interact()?
+        {
+            // if the prompt private keys fails, the user has cancelled the order
+            if !safe.prompt_private_keys().is_ok() {
+                println!("Order creation cancelled");
+                return Ok(());
+            }
+
+            // approve the vault relayer
+            safe.approve(&sell_token_amount, vault_relayer).await?;
+        } else {
+            println!("Order creation cancelled");
+            return Ok(());
+        }
+    }
 
     // confirm the order
     if !dialoguer::Confirm::new()
-        .with_prompt(format!("Confirm {} {} for {}?", order_kind, token_amount0, token_amount1))
+        .with_prompt(format!(
+            "Confirm {} {} for {}?",
+            order_kind, token_amount0, token_amount1
+        ))
         .interact()?
     {
         println!("Order creation cancelled");

@@ -249,6 +249,36 @@ impl SettlementContract {
     }
 }
 
+pub enum VaultRelayerContract {
+    Mainnet,
+    Goerli,
+    Gnosis,
+}
+
+impl VaultRelayerContract {
+    pub fn get_address(&self) -> Address {
+        match self {
+            VaultRelayerContract::Mainnet => "0xC92E8bdf79f0507f65a392b0ab4667716BFE0110"
+                .parse()
+                .unwrap(),
+            VaultRelayerContract::Goerli => "0xC92E8bdf79f0507f65a392b0ab4667716BFE0110"
+                .parse()
+                .unwrap(),
+            VaultRelayerContract::Gnosis => "0xC92E8bdf79f0507f65a392b0ab4667716BFE0110"
+                .parse()
+                .unwrap(),
+        }
+    }
+
+    pub fn get_by_chain(chain: &SupportedChains) -> VaultRelayerContract {
+        match chain {
+            SupportedChains::Mainnet => VaultRelayerContract::Mainnet,
+            SupportedChains::Goerli => VaultRelayerContract::Goerli,
+            SupportedChains::Gnosis => VaultRelayerContract::Gnosis,
+        }
+    }
+}
+
 /// Connect to an RPC node and get the chain id
 pub async fn get_chain_id(rpc_url: &str) -> Result<u64> {
     let provider =

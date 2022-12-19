@@ -34,6 +34,12 @@ abigen!(
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
+abigen!(
+    ERC20,
+    "./abi/ERC20.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
 pub struct Safe {
     pub address: H160,
     pub contract: GnosisSafe<Provider<Http>>,
@@ -183,6 +189,52 @@ impl Safe {
 
         Ok(results.count > 0)
     }
+
+    /// Check if the Safe has enough balance to cover the transaction
+    pub async fn has_min_balance(&self, token: &TokenAmount) -> Result<bool> {
+        let contract = ERC20::new(
+            H160::from_str(token.token.address.as_str()).unwrap(),
+            self.provider.clone(),
+        );
+
+        let balance = contract.balance_of(self.address).call().await?;
+
+        Ok(balance >= token.amount)
+    }
+
+    /// Check if the nominated address has enough approval to cover the transaction
+    pub async fn has_min_approval(&self, token: &TokenAmount, spender: H160) -> Result<bool> {
+        let contract = ERC20::new(
+            H160::from_str(token.token.address.as_str()).unwrap(),
+            self.provider.clone(),
+        );
+
+        let allowance = contract.allowance(self.address, spender).call().await?;
+
+        Ok(allowance >= token.amount)
+    }
+
+    pub async fn approve(&self, token: &TokenAmount, spender: H160) -> Result<()> {
+        unimplemented!("Approval not yet implemented");
+        // let contract = ERC20::new(
+        //     H160::from_str(token.token.address.as_str()).unwrap(),
+        //     self.provider.clone(),
+        // );
+
+        // let tx = contract
+        //     .approve(spender, token.amount)
+        //     .nonce(self.provider.get_nonce(self.address).await?)
+        //     .gas_price(self.provider.get_gas_price().await?)
+        //     .gas(100_000)
+        //     .send()
+        //     .await?;
+
+        // println!("Waiting for approval transaction to be mined...");
+        // self.provider.wait_for_transaction(tx).await?;
+
+        // Ok(())
+    }
+
     pub async fn sign(&self, message: &Bytes) -> Result<([u8; 32], Vec<u8>)> {
         // if there are no private keys, return an error
         if self.pks.is_none() {
