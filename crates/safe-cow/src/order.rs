@@ -102,8 +102,7 @@ where
         if dialoguer::Confirm::new()
             .with_prompt(format!(
                 "Approve the GPv2VaultRelayer ({}) for {}?",
-                vault_relayer,
-                &sell_token_amount
+                vault_relayer, &sell_token_amount
             ))
             .interact()?
         {
