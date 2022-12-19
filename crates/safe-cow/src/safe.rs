@@ -8,15 +8,21 @@ use ethers::{
     types::transaction::eip712::{EIP712Domain, EIP712WithDomain, Eip712},
     utils,
 };
-use safe_sdk::{
-    rpc::{
-        common::{Operations, Paginated},
-        msig_history::MsigTxResponse,
-        propose::{MetaTransactionData, SafeGasConfig, SafeTransactionData},
-    },
+use safe_sdk::rpc::{
+    common::{Operations, Paginated},
+    msig_history::MsigTxResponse,
+    propose::{MetaTransactionData, SafeGasConfig, SafeTransactionData},
 };
 
-use crate::{order::TokenAmount, Opts, SupportedChains, contracts::{erc20::{ERC20, self}, erc1271_signature_validator::ERC1271SignatureValidator, gnosis_safe::GnosisSafe}};
+use crate::{
+    contracts::{
+        erc1271_signature_validator::ERC1271SignatureValidator,
+        erc20::{self, ERC20},
+        gnosis_safe::GnosisSafe,
+    },
+    order::TokenAmount,
+    Opts, SupportedChains,
+};
 
 /// Updated magic number from https://github.com/safe-global/safe-contracts/blob/main/contracts/handler/CompatibilityFallbackHandler.sol
 /// EIP-1271 published magic number is [0x16, 0x26, 0xba, 0x7e];
@@ -267,43 +273,44 @@ impl Safe {
         let gas_token = H160::from_str("0x0000000000000000000000000000000000000000")?;
         let refund_receiver = H160::from_str("0x0000000000000000000000000000000000000000")?;
         let signatures = Bytes::from(packed);
-        
+
         // Prompt the user for a private key
         let private_key = prompt_key("Private key for account to submit transaction:".to_string());
 
         let provider = Arc::new({
             SignerMiddleware::new(
                 self.provider.clone(),
-                private_key.parse::<LocalWallet>()?
+                private_key
+                    .parse::<LocalWallet>()?
                     .with_chain_id(self.chain.get_chain_id()),
             )
         });
 
         let contract = GnosisSafe::new(self.address, provider.clone());
-        let tx = contract
-            .exec_transaction(
-                to,
-                value.into(),
-                call,
-                operation.into(),
-                safe_tx_gas.into(),
-                base_gas.into(),
-                gas_price.into(),
-                gas_token,
-                refund_receiver,
-                signatures,
-            );
-        let tx = tx
-            .send()
-            .await?;
+        let tx = contract.exec_transaction(
+            to,
+            value.into(),
+            call,
+            operation.into(),
+            safe_tx_gas.into(),
+            base_gas.into(),
+            gas_price.into(),
+            gas_token,
+            refund_receiver,
+            signatures,
+        );
+        let tx = tx.send().await?;
 
-        print!("Transaction hash {} submitted, waiting for 2 confirmations...", tx.tx_hash());
+        print!(
+            "Transaction hash {} submitted, waiting for 1 confirmation...",
+            tx.tx_hash()
+        );
 
         let receipt = tx.confirmations(1).await?;
         match receipt {
             Some(_receipt) => {
                 println!("Transaction mined");
-            },
+            }
             None => {
                 println!("Transaction mining failed");
             }

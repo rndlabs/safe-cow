@@ -9,10 +9,10 @@ use std::{fmt, sync::Arc};
 use model::order::OrderKind;
 use token_list::TokenList;
 
+pub mod contracts;
 pub mod order;
 pub mod safe;
 pub mod sign;
-pub mod contracts;
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {

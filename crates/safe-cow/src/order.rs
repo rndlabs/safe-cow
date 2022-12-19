@@ -9,8 +9,9 @@ use token_list::{Token, TokenList};
 use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, SellTokenSource};
 
 use crate::{
-    get_cowswap_api_url, get_cowswap_explorer_url, safe::Safe, CancelOrder, CowswapApiError,
-    CreateOrder, Invertible, Opts, SettlementContract, SupportedChains, VaultRelayerContract, contracts::erc20::ERC20,
+    contracts::erc20::ERC20, get_cowswap_api_url, get_cowswap_explorer_url, safe::Safe,
+    CancelOrder, CowswapApiError, CreateOrder, Invertible, Opts, SettlementContract,
+    SupportedChains, VaultRelayerContract,
 };
 
 pub enum OrderTokens {
