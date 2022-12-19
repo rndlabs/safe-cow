@@ -101,7 +101,8 @@ where
         // prompt the user to approve the vault relayer
         if dialoguer::Confirm::new()
             .with_prompt(format!(
-                "Approve the GPv2VaultRelayer for {}?",
+                "Approve the GPv2VaultRelayer ({}) for {}?",
+                Address::from(vault_relayer).to_string(),
                 &sell_token_amount
             ))
             .interact()?
@@ -131,11 +132,10 @@ where
         println!("Order creation cancelled");
         return Ok(());
     } else {
+        // blank line for readability
+        println!();
         println!("Creating order...");
     }
-
-    // print a blank line for readability
-    println!();
 
     // if the prompt private keys fails, the user has cancelled the order
     if !safe.prompt_private_keys().is_ok() {
@@ -179,9 +179,6 @@ where
         println!("Signature is invalid");
         return Ok(());
     }
-
-    // print a blank line for readability
-    println!();
 
     // Triple check confirmation here
     if !dialoguer::Confirm::new()

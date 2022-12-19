@@ -145,6 +145,9 @@ impl Safe {
             }
         }
 
+        // print a blank line for readability
+        println!();
+
         // sort the private keys by their public key address
         // signatures are required to be ordered for consideration by the smart contract
         private_keys.sort_by(|a, b| {
