@@ -3134,6 +3134,7 @@ dependencies = [
  "promkit",
  "reqwest",
  "rpassword",
+ "safe-sdk",
  "serde",
  "serde_json",
  "token-list",
