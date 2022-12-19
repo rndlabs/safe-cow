@@ -6,7 +6,7 @@ use eyre::Result;
 use serde::{Deserialize, Serialize};
 use std::{fmt, sync::Arc};
 
-use model::order::OrderKind;
+use model::order::{OrderKind, OrderUid};
 use token_list::TokenList;
 
 pub mod contracts;
@@ -86,7 +86,7 @@ pub struct CancelOrder {
         value_name = "ORDER",
         value_parser = parse_order_uid,
     )]
-    pub order_uid: Vec<u8>,
+    pub order_uids: Vec<OrderUid>,
 }
 
 #[derive(Args, Debug, Clone)]

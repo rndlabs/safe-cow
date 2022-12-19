@@ -230,16 +230,34 @@ where
 
 /// Cancel an order by its ID
 pub async fn cancel_order<M>(
-    config: CancelOrder,
-    opts: &Opts,
-    safe: &Safe,
-    provider: Arc<Provider<M>>,
-    chain: SupportedChains,
+    _config: CancelOrder,
+    _opts: &Opts,
+    _safe: &Safe,
+    _provider: Arc<Provider<M>>,
+    _chain: SupportedChains,
 ) -> Result<()>
 where
     M: JsonRpcClient + Send + Sync + 'static,
 {
-    unimplemented!()
+    // // Define the order cancellations
+    // let cancellations: OrderCancellations = OrderCancellations {
+    //     order_uids: config.order_uids,
+    // };
+
+    // // Sign the order cancellations
+    // let digest: Bytes = cancellations.hash_struct().into();
+    // let signature = safe.sign(&digest).await?;
+
+    // let signed_order_cancellations = SignedOrderCancellations {
+    //     cancellations,
+    //     signature: signature.1,
+    //     signing_scheme: EcdsaSigningScheme::Ei
+    // };
+
+    // OrderCacellations(bytes[] orderUids)
+    println!("EIP-1271 signature order cancellations not yet implemented");
+
+    Ok(())
 }
 
 /// An analogue for the similar CurrencyAmount popularised by Uniswap's sdk-core.
