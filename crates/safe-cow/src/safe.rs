@@ -291,7 +291,7 @@ impl Safe {
             to,
             value.into(),
             call,
-            operation.into(),
+            operation,
             safe_tx_gas.into(),
             base_gas.into(),
             gas_price.into(),
@@ -359,12 +359,12 @@ impl Safe {
 
     /// Verify the signature of a hash against a contract that implements the
     /// EIP-1271 interface.
-    pub async fn verify_signature(&self, data: &Bytes, signature: &Vec<u8>) -> Result<bool> {
+    pub async fn verify_signature(&self, data: &Bytes, signature: &[u8]) -> Result<bool> {
         let contract = ERC1271SignatureValidator::new(self.address, self.provider.clone());
 
         // convert digest to bytes32 for the contract call
         let eip1271_result: [u8; 4] = contract
-            .is_valid_signature(data.clone(), Bytes::from(signature.clone()))
+            .is_valid_signature(data.clone(), Bytes::from(signature.to_owned()))
             .call()
             .await?;
 
@@ -373,7 +373,7 @@ impl Safe {
     }
 
     pub async fn get_safe_app_url(&self) -> Result<String> {
-        let chain = SupportedChains::get_chain(self.provider.clone().into()).await?;
+        let chain = SupportedChains::get_chain(self.provider.clone()).await?;
 
         Ok(match chain {
             SupportedChains::Mainnet => format!("{}/{}:", self.base_url, "eth"),

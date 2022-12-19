@@ -135,7 +135,7 @@ impl SupportedChains {
         match provider.get_chainid().await {
             Ok(chain_id) => match SupportedChains::get_by_chain_id(chain_id.as_u64()) {
                 Some(chain) => Ok(chain),
-                None => panic!("Unsupported chain ID: {}", chain_id),
+                None => panic!("Unsupported chain ID: {chain_id}"),
             },
             Err(_) => panic!("Failed to get chain ID"),
         }

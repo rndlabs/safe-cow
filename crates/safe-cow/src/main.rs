@@ -41,18 +41,18 @@ async fn main() -> Result<(), Error> {
         }
         // Cancel an order for a safe
         Commands::CancelOrder(order) => {
-            order::cancel_order(order, &opts, &mut safe, provider, chain).await?;
+            order::cancel_order(order, &opts, &safe, provider, chain).await?;
         }
         // Sign a message with a safe
         Commands::SignMessage(message) => {
-            sign::run(message, &mut safe).await?;
+            sign::run(message, &safe).await?;
         }
     }
     Ok(())
 }
 
 /// Prints the banner
-fn banner() -> () {
+fn banner() {
     println!(
         r#"
              /( ,,,,, )\

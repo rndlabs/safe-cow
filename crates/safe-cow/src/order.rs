@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub enum OrderTokens {
-    TokenList(TokenList),
+    TokenList(Box<TokenList>),
     Custom,
 }
 /// Create a new order
@@ -34,7 +34,7 @@ where
         .with_prompt("Use a token list for selecting tokens?")
         .interact()?
     {
-        true => OrderTokens::TokenList(chain.get_token_list().await?),
+        true => OrderTokens::TokenList(Box::new(chain.get_token_list().await?)),
         false => OrderTokens::Custom,
     };
 
@@ -53,7 +53,7 @@ where
         &usable_tokens,
         order_kind.to_string(),
         provider.clone(),
-        &opts,
+        opts,
     )
     .await?;
 
@@ -61,7 +61,7 @@ where
         &usable_tokens,
         order_kind.invert().to_string(),
         provider.clone(),
-        &opts,
+        opts,
     )
     .await?;
 
@@ -89,10 +89,9 @@ where
     if do_approve_tx && safe.has_pending_txs().await? {
         println!("You have pending transactions in the Safe API. Please execute these first.");
         println!(
-            "{}{}{}",
+            "{}{}/transactions/queue",
             safe.get_safe_app_url().await?,
-            utils::to_checksum(&safe.address, None),
-            "/transactions/queue"
+            utils::to_checksum(&safe.address, None)
         );
         return Ok(());
     }
@@ -103,13 +102,13 @@ where
         if dialoguer::Confirm::new()
             .with_prompt(format!(
                 "Approve the GPv2VaultRelayer ({}) for {}?",
-                Address::from(vault_relayer).to_string(),
+                vault_relayer,
                 &sell_token_amount
             ))
             .interact()?
         {
             // if the prompt private keys fails, the user has cancelled the order
-            if !safe.prompt_private_keys().is_ok() {
+            if safe.prompt_private_keys().is_err() {
                 println!("Order creation cancelled");
                 return Ok(());
             }
@@ -125,8 +124,7 @@ where
     // confirm the order
     if !dialoguer::Confirm::new()
         .with_prompt(format!(
-            "Confirm {} {} for {}?",
-            order_kind, token_amount0, token_amount1
+            "Confirm {order_kind} {token_amount0} for {token_amount1}?",
         ))
         .interact()?
     {
@@ -139,16 +137,16 @@ where
     }
 
     // if the prompt private keys fails, the user has cancelled the order
-    if !safe.prompt_private_keys().is_ok() {
+    if safe.prompt_private_keys().is_err() {
         println!("Order creation cancelled");
         return Ok(());
     }
 
     // 1. Create the cowswap order
     let order = OrderBuilder::default()
-        .with_buy_token(buy_token_amount.into_address())
+        .with_buy_token(buy_token_amount.get_address())
         .with_buy_amount(buy_token_amount.amount)
-        .with_sell_token(sell_token_amount.into_address())
+        .with_sell_token(sell_token_amount.get_address())
         .with_sell_amount(sell_token_amount.amount)
         // make order valid to current time + 20 minutes
         .with_valid_to(chrono::Utc::now().timestamp() as u32 + config.valid_to.unwrap_or(1200))
@@ -297,7 +295,7 @@ impl FromTokenList for Token {
             .collect::<Vec<_>>();
 
         let token = FuzzySelect::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!("{} Token", msg))
+            .with_prompt(format!("{msg} Token"))
             .items(&token_names)
             .default(0)
             .interact()?;
@@ -353,19 +351,19 @@ impl FromChain for Token {
 }
 
 // Define a trait to convert a token to an address
-pub trait IntoAddress {
-    fn into_address(&self) -> Address;
+pub trait GetAddress {
+    fn get_address(&self) -> Address;
 }
 
-impl IntoAddress for Token {
-    fn into_address(&self) -> Address {
+impl GetAddress for Token {
+    fn get_address(&self) -> Address {
         Address::from_str(&self.address).unwrap()
     }
 }
 
-impl IntoAddress for TokenAmount {
-    fn into_address(&self) -> Address {
-        self.token.into_address()
+impl GetAddress for TokenAmount {
+    fn get_address(&self) -> Address {
+        self.token.get_address()
     }
 }
 
@@ -408,7 +406,7 @@ where
         }
     };
 
-    let amount = get_amount(&token, provider.clone(), &opts).await;
+    let amount = get_amount(&token, provider.clone(), opts).await;
 
     Ok(TokenAmount::new(token, amount))
 }
@@ -419,7 +417,7 @@ where
     M: JsonRpcClient + Send + Sync + 'static,
 {
     // Get the balance of the token
-    let contract = ERC20::new(token.into_address(), provider.clone());
+    let contract = ERC20::new(token.get_address(), provider.clone());
     let balance = contract
         .balance_of(*opts.safe.as_address().unwrap())
         .call()
@@ -433,7 +431,7 @@ where
 
     amount = loop {
         if amount.as_ref().is_ok_and(|x| {
-            x.is_empty() || !ethers::utils::parse_units(&x, i32::from(token.decimals)).is_ok()
+            x.is_empty() || ethers::utils::parse_units(x, i32::from(token.decimals)).is_err()
         }) {
             println!("Invalid amount");
             amount = dialoguer::Input::<String>::new()
