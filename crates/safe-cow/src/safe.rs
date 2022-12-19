@@ -9,7 +9,7 @@ use ethers::{
 };
 use safe_sdk::rpc::{common::Paginated, msig_history::MsigTxResponse};
 
-use crate::{order::TokenAmount, Opts, SupportedChains};
+use crate::{order::TokenAmount, Opts, SupportedChains, contracts::{erc20::{ERC20, self}, erc1271_signature_validator::ERC1271SignatureValidator, gnosis_safe::GnosisSafe}};
 
 /// Updated magic number from https://github.com/safe-global/safe-contracts/blob/main/contracts/handler/CompatibilityFallbackHandler.sol
 /// EIP-1271 published magic number is [0x16, 0x26, 0xba, 0x7e];
@@ -21,25 +21,6 @@ const UPDATED_MAGIC_NUMBER: [u8; 4] = [0x20, 0xc1, 0x3b, 0x0b];
 pub struct SafeMessage {
     message: Bytes,
 }
-
-// Generate the type-safe contract bindings for the EIP-1271 interface
-abigen!(
-    ERC1271SignatureValidator,
-    "./abi/ERC1271SignatureValidator.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-abigen!(
-    GnosisSafe,
-    "./abi/GnosisSafe.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-abigen!(
-    ERC20,
-    "./abi/ERC20.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
 
 pub struct Safe {
     pub address: H160,

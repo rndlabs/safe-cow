@@ -10,14 +10,8 @@ use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, 
 
 use crate::{
     get_cowswap_api_url, get_cowswap_explorer_url, safe::Safe, CancelOrder, CowswapApiError,
-    CreateOrder, Invertible, Opts, SettlementContract, SupportedChains, VaultRelayerContract,
+    CreateOrder, Invertible, Opts, SettlementContract, SupportedChains, VaultRelayerContract, contracts::erc20::ERC20,
 };
-
-abigen!(
-    ERC20,
-    "./abi/ERC20.json",
-    event_derives(serde::Deserialize, serde::Serialize)
-);
 
 pub enum OrderTokens {
     TokenList(TokenList),

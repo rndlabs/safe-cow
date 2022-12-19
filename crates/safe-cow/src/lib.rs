@@ -12,6 +12,7 @@ use token_list::TokenList;
 pub mod order;
 pub mod safe;
 pub mod sign;
+pub mod contracts;
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
