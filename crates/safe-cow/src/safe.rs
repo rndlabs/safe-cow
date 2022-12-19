@@ -3,11 +3,18 @@ use std::{str::FromStr, sync::Arc};
 use eyre::Result;
 
 use ethers::{
+    abi::AbiEncode,
     prelude::{k256::ecdsa::SigningKey, *},
     types::transaction::eip712::{EIP712Domain, EIP712WithDomain, Eip712},
     utils,
 };
-use safe_sdk::rpc::{common::Paginated, msig_history::MsigTxResponse};
+use safe_sdk::{
+    rpc::{
+        common::{Operations, Paginated},
+        msig_history::MsigTxResponse,
+        propose::{MetaTransactionData, SafeGasConfig, SafeTransactionData},
+    },
+};
 
 use crate::{order::TokenAmount, Opts, SupportedChains, contracts::{erc20::{ERC20, self}, erc1271_signature_validator::ERC1271SignatureValidator, gnosis_safe::GnosisSafe}};
 
@@ -29,6 +36,7 @@ pub struct Safe {
     pub threshold: u32,
     pks: Option<Vec<String>>,
     pub provider: Arc<Provider<Http>>,
+    pub chain: SupportedChains,
     pub base_url: String,
 }
 
@@ -77,6 +85,7 @@ impl Safe {
             threshold: threshold.1.as_u32(),
             pks,
             provider: provider.into(),
+            chain,
             base_url,
         })
     }
@@ -189,25 +198,121 @@ impl Safe {
         Ok(allowance >= token.amount)
     }
 
+    /// Approve the nominated address to spend the token amount
     pub async fn approve(&self, token: &TokenAmount, spender: H160) -> Result<()> {
-        unimplemented!("Approval not yet implemented");
-        // let contract = ERC20::new(
-        //     H160::from_str(token.token.address.as_str()).unwrap(),
-        //     self.provider.clone(),
-        // );
+        // encode the call
+        let call = erc20::ApproveCall {
+            spender,
+            amount: token.amount,
+        };
+        let call = Bytes::from(call.encode());
 
-        // let tx = contract
-        //     .approve(spender, token.amount)
-        //     .nonce(self.provider.get_nonce(self.address).await?)
-        //     .gas_price(self.provider.get_gas_price().await?)
-        //     .gas(100_000)
-        //     .send()
-        //     .await?;
+        let core = MetaTransactionData {
+            to: safe_sdk::rpc::common::ChecksumAddress(H160::from_str(&token.token.address)?),
+            value: 0,
+            data: Some(call.clone()),
+            operation: Some(Operations::Call),
+        };
 
-        // println!("Waiting for approval transaction to be mined...");
-        // self.provider.wait_for_transaction(tx).await?;
+        let gas = SafeGasConfig {
+            safe_tx_gas: 0,
+            base_gas: 0,
+            gas_price: 0,
+            gas_token: safe_sdk::rpc::common::ChecksumAddress(H160::from_str(
+                "0x0000000000000000000000000000000000000000",
+            )?),
+            refund_receiver: safe_sdk::rpc::common::ChecksumAddress(H160::from_str(
+                "0x0000000000000000000000000000000000000000",
+            )?),
+        };
 
-        // Ok(())
+        // get the nonce
+        let nonce = self.contract.nonce().call().await?.as_u64();
+
+        let tx = SafeTransactionData {
+            core: core.clone(),
+            gas,
+            nonce,
+        };
+
+        // sign the typed data and assemble all the signatures
+        let mut signatures = Vec::new();
+        for pk in self.pks.as_ref().unwrap() {
+            let wallet = pk.parse::<LocalWallet>()?;
+            let signature = tx
+                .sign(&wallet, self.address, self.chain.get_chain_id())
+                .await?;
+
+            signatures.push(signature);
+        }
+
+        // join the signatures into a single bytes array
+        let mut packed = Vec::new();
+        for signature in signatures {
+            packed.extend_from_slice(&signature.signature().to_vec());
+        }
+
+        // execute the transaction
+        let to = H160::from_str(&token.token.address)?;
+        let value = 0;
+        // extract the number from the operation enum
+        let operation = match core.operation.unwrap() {
+            Operations::Call => 0,
+            Operations::DelegateCall => 1,
+        };
+
+        let safe_tx_gas = 0;
+        let base_gas = 0;
+        let gas_price = 0;
+        let gas_token = H160::from_str("0x0000000000000000000000000000000000000000")?;
+        let refund_receiver = H160::from_str("0x0000000000000000000000000000000000000000")?;
+        let signatures = Bytes::from(packed);
+        
+        // Prompt the user for a private key
+        let private_key = prompt_key("Private key for account to submit transaction:".to_string());
+
+        let provider = Arc::new({
+            SignerMiddleware::new(
+                self.provider.clone(),
+                private_key.parse::<LocalWallet>()?
+                    .with_chain_id(self.chain.get_chain_id()),
+            )
+        });
+
+        let contract = GnosisSafe::new(self.address, provider.clone());
+        let tx = contract
+            .exec_transaction(
+                to,
+                value.into(),
+                call,
+                operation.into(),
+                safe_tx_gas.into(),
+                base_gas.into(),
+                gas_price.into(),
+                gas_token,
+                refund_receiver,
+                signatures,
+            );
+        let tx = tx
+            .send()
+            .await?;
+
+        print!("Transaction hash {} submitted, waiting for 2 confirmations...", tx.tx_hash());
+
+        let receipt = tx.confirmations(1).await?;
+        match receipt {
+            Some(_receipt) => {
+                println!("Transaction mined");
+            },
+            None => {
+                println!("Transaction mining failed");
+            }
+        }
+
+        // print a blank line
+        println!();
+
+        Ok(())
     }
 
     pub async fn sign(&self, message: &Bytes) -> Result<([u8; 32], Vec<u8>)> {
