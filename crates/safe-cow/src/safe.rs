@@ -293,8 +293,6 @@ impl Safe {
     }
 
     pub async fn get_safe_app_url(&self) -> Result<String> {
-        let base_url = "https://app.safe.global";
-
         let chain = SupportedChains::get_chain(self.provider.clone().into()).await?;
 
         Ok(match chain {
