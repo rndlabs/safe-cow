@@ -99,28 +99,12 @@ impl Safe {
         let mut private_keys = vec![];
         loop {
             // Prompt the user for a private key
-            let private_key = rpassword::prompt_password(format!(
+            let private_key = prompt_key(format!(
                 "Private key #{} / {} ({} total owners): ",
                 (private_keys.len() + 1),
                 self.threshold,
                 self.owners.len()
-            ))?;
-
-            // If the private key is empty, we are done
-            if private_key.is_empty() {
-                break;
-            }
-
-            // Validate the private key
-            if private_key.len() != 64 {
-                println!("Invalid private key length");
-                continue;
-            }
-
-            if let Err(e) = hex::decode(&private_key) {
-                println!("Invalid private key: {e}");
-                continue;
-            }
+            ));
 
             // check to make sure that the private key corresponds to an owner
             let sk = SigningKey::from_bytes(&hex::decode(private_key.clone()).unwrap()).unwrap();
@@ -285,4 +269,26 @@ impl Safe {
             SupportedChains::Gnosis => format!("{}/{}:", self.base_url, "gno"),
         })
     }
+}
+
+fn prompt_key(msg: String) -> String {
+    let private_key = loop {
+        // Prompt the user for a private key
+        let pk = rpassword::prompt_password(&msg).unwrap();
+
+        // Validate the private key
+        if pk.len() != 64 {
+            println!("Invalid private key length");
+            continue;
+        }
+
+        if let Err(e) = hex::decode(&pk) {
+            println!("Invalid private key: {e}");
+            continue;
+        }
+
+        break pk;
+    };
+
+    private_key
 }
