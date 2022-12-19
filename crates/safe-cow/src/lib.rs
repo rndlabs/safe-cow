@@ -38,6 +38,7 @@ pub struct Opts {
     )]
     pub rpc_url: String,
     #[clap(
+        long,
         help = "The Safe address the order is from",
         value_parser = parse_name_or_address,
         value_name = "SAFE",
