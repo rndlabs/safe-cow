@@ -173,6 +173,14 @@ impl SupportedChains {
         }
     }
 
+    pub fn get_api_name_v2(&self) -> String {
+        match self {
+            SupportedChains::Mainnet => "mainnet".to_string(),
+            SupportedChains::Goerli => "goerli".to_string(),
+            SupportedChains::Gnosis => "gnosis-chain".to_string(),
+        }
+    }
+
     pub async fn get_token_list(&self) -> Result<TokenList> {
         print!("Fetching token list for {}...", self.get_name());
 

@@ -6,6 +6,7 @@ use ethers::{
     prelude::{k256::ecdsa::SigningKey, *},
     types::transaction::eip712::{EIP712Domain, EIP712WithDomain, Eip712},
 };
+use safe_sdk::rpc::{common::Paginated, msig_history::MsigTxResponse};
 
 use crate::Opts;
 
@@ -40,15 +41,14 @@ pub struct Safe {
     pub threshold: u32,
     pks: Option<Vec<String>>,
     pub provider: Arc<Provider<Http>>,
+    pub base_url: String,
 }
 
 impl Safe {
     pub async fn new(opts: &Opts) -> Result<Self> {
         let provider = Provider::<Http>::try_from(opts.rpc_url.as_str())?;
-        let contract = GnosisSafe::new(*opts.safe.as_address().unwrap(), provider.clone().into());
+        let contract = GnosisSafe::new(address, provider.clone().into());
 
-        // check that the version = 1.3.0 and the threshold is 1 or greater
-        // TODO: Assemble this into a single call to the contract
         let version_call = contract.version();
         let threshold_call = contract.get_threshold();
         let owners_call = contract.get_owners();
@@ -72,6 +72,15 @@ impl Safe {
         // default to no private keys
         let pks = None;
 
+        let chain = SupportedChains::get_chain(provider.clone().into()).await?;
+
+        // generate the api url
+        let base_url = format!(
+            "https://safe-transaction-{}.safe.global/api/v1/safes/{}",
+            chain.get_api_name_v2(),
+            utils::to_checksum(&address, None)
+        );
+
         Ok(Self {
             address: *opts.safe.as_address().unwrap(),
             contract,
@@ -79,6 +88,7 @@ impl Safe {
             threshold: threshold.1.as_u32(),
             pks,
             provider: provider.into(),
+            base_url,
         })
     }
 
@@ -157,6 +167,22 @@ impl Safe {
         Ok(())
     }
 
+    /// Check if the Safe has any pending transactions that have not been executed
+    /// This is done by querying for transactions with a nonce greater than the current nonce
+    /// in the Safe transaction service API.
+    pub async fn has_pending_txs(&self) -> Result<bool> {
+        // get the current nonce
+        let nonce: U256 = self.contract.nonce().call().await?;
+
+        // get the transactions from the Safe transaction service API
+        let url = format!("{}/multisig-transactions/?nonce__gte={}", self.base_url, nonce);
+        let results: Paginated<MsigTxResponse> = reqwest::get(&url)
+            .await?
+            .json()
+            .await?;
+
+        Ok(results.count > 0)
+    }
     pub async fn sign(&self, message: &Bytes) -> Result<([u8; 32], Vec<u8>)> {
         // if there are no private keys, return an error
         if self.pks.is_none() {
@@ -206,4 +232,18 @@ impl Safe {
         // check the result against the magic number
         Ok(eip1271_result == UPDATED_MAGIC_NUMBER)
     }
+
+    pub async fn get_safe_app_url(&self) -> Result<String> {
+        let base_url = "https://app.safe.global";
+    
+        let chain = SupportedChains::get_chain(self.provider.clone().into()).await?;
+
+        Ok(
+            match chain {
+                SupportedChains::Mainnet => format!("{}/{}:", self.base_url, "eth"),
+                SupportedChains::Goerli => format!("{}/{}:", self.base_url, "gor"),
+                SupportedChains::Gnosis => format!("{}/{}:", self.base_url, "gno"),
+            }
+        )
+    }    
 }
