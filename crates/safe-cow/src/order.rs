@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use dialoguer::{theme::ColorfulTheme, FuzzySelect, Select};
-use ethers::prelude::*;
+use ethers::{prelude::*, utils};
 use eyre::Result;
 use reqwest::Client;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
@@ -91,7 +91,7 @@ where
         println!(
             "{}{}{}",
             safe.get_safe_app_url().await?,
-            Bytes::from(safe.address.to_fixed_bytes()),
+            utils::to_checksum(&safe.address, None),
             "/transactions/queue"
         );
         return Ok(());
@@ -326,7 +326,7 @@ impl FromChain for Token {
             name: name.1,
             symbol: symbol.1,
             decimals: decimals.1.as_u32().try_into()?,
-            address: Bytes::from(address.as_bytes().to_vec()).to_string(),
+            address: utils::to_checksum(&address, None),
             logo_uri: None,
             tags: Vec::new(),
             extensions: HashMap::new(),
