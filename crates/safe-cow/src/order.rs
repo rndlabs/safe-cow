@@ -3,7 +3,7 @@ use dialoguer::{theme::ColorfulTheme, FuzzySelect, Select};
 use ethers::prelude::*;
 use eyre::Result;
 use reqwest::Client;
-use std::{collections::HashMap, str::FromStr, sync::Arc, fmt};
+use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
 use token_list::{Token, TokenList};
 
 use model::order::{BuyTokenDestination, OrderBuilder, OrderCreation, OrderKind, SellTokenSource};
@@ -54,8 +54,13 @@ where
     let order_kind = order_kinds[order_kind];
 
     // Get the respective tokens annd amounts for the swap
-    let token_amount0 =
-        get_token_amount(&usable_tokens, order_kind.to_string(), provider.clone(), &opts).await?;
+    let token_amount0 = get_token_amount(
+        &usable_tokens,
+        order_kind.to_string(),
+        provider.clone(),
+        &opts,
+    )
+    .await?;
 
     let token_amount1 = get_token_amount(
         &usable_tokens,
@@ -67,14 +72,8 @@ where
 
     // if the order is a sell order, we need to invert the token amounts
     let (buy_token_amount, sell_token_amount) = match order_kind {
-        OrderKind::Buy => (
-            token_amount0.clone(),
-            token_amount1.clone()
-        ),
-        OrderKind::Sell => (
-            token_amount1.clone(),
-            token_amount0.clone()
-        ),
+        OrderKind::Buy => (token_amount0.clone(), token_amount1.clone()),
+        OrderKind::Sell => (token_amount1.clone(), token_amount0.clone()),
     };
 
     // print a blank line for readability
@@ -89,15 +88,17 @@ where
     // check that the vaultrelayer has enough allowance for the sell token
     let vault_relayer = VaultRelayerContract::get_by_chain(&chain).get_address();
     let do_approve_tx = !safe
-        .has_min_approval(
-            &sell_token_amount,
-            vault_relayer,
-        )
+        .has_min_approval(&sell_token_amount, vault_relayer)
         .await?;
 
     if do_approve_tx && safe.has_pending_txs().await? {
         println!("You have pending transactions in the Safe API. Please execute these first.");
-        println!("{}{}{}", safe.get_safe_app_url().await?, Bytes::from(safe.address.to_fixed_bytes()), "/transactions/queue");
+        println!(
+            "{}{}{}",
+            safe.get_safe_app_url().await?,
+            Bytes::from(safe.address.to_fixed_bytes()),
+            "/transactions/queue"
+        );
         return Ok(());
     }
 
@@ -403,12 +404,17 @@ where
 }
 
 /// Prompt the user to input a token amount. Enforce that the amount is valid.
-pub async fn get_amount<M>(token: &Token, provider: Arc<Provider<M>>, opts: &Opts) -> U256 
-where M: JsonRpcClient + Send + Sync + 'static
+pub async fn get_amount<M>(token: &Token, provider: Arc<Provider<M>>, opts: &Opts) -> U256
+where
+    M: JsonRpcClient + Send + Sync + 'static,
 {
     // Get the balance of the token
     let contract = ERC20::new(token.into_address(), provider.clone());
-    let balance = contract.balance_of(*opts.safe.as_address().unwrap()).call().await.unwrap();
+    let balance = contract
+        .balance_of(*opts.safe.as_address().unwrap())
+        .call()
+        .await
+        .unwrap();
     let balance = ethers::utils::format_units(balance, i32::from(token.decimals)).unwrap();
 
     let mut amount = dialoguer::Input::<String>::new()

@@ -2,11 +2,10 @@ use eyre::Result;
 
 use ethers::types::Bytes;
 
-use crate::{SignMessage, safe::Safe};
+use crate::{safe::Safe, SignMessage};
 
 /// Run the sign message command
-pub async fn run(config: SignMessage, safe: &Safe) -> Result<()> 
-{
+pub async fn run(config: SignMessage, safe: &Safe) -> Result<()> {
     // test if the message is a valid hex string otherwise encode string as bytes
     let message = if config.message.starts_with("0x") {
         hex::decode(&config.message[2..])?

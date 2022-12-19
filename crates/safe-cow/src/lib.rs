@@ -3,15 +3,15 @@
 use clap::{Args, Parser, Subcommand};
 use ethers::prelude::*;
 use eyre::Result;
-use serde::{Serialize, Deserialize};
-use std::{sync::Arc, fmt};
+use serde::{Deserialize, Serialize};
+use std::{fmt, sync::Arc};
 
 use model::order::OrderKind;
 use token_list::TokenList;
 
 pub mod order;
-pub mod sign;
 pub mod safe;
+pub mod sign;
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {

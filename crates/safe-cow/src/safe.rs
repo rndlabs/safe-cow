@@ -1,14 +1,15 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use eyre::Result;
 
 use ethers::{
     prelude::{k256::ecdsa::SigningKey, *},
     types::transaction::eip712::{EIP712Domain, EIP712WithDomain, Eip712},
+    utils,
 };
 use safe_sdk::rpc::{common::Paginated, msig_history::MsigTxResponse};
 
-use crate::Opts;
+use crate::{order::TokenAmount, Opts, SupportedChains};
 
 /// Updated magic number from https://github.com/safe-global/safe-contracts/blob/main/contracts/handler/CompatibilityFallbackHandler.sol
 /// EIP-1271 published magic number is [0x16, 0x26, 0xba, 0x7e];
@@ -53,6 +54,7 @@ pub struct Safe {
 impl Safe {
     pub async fn new(opts: &Opts) -> Result<Self> {
         let provider = Provider::<Http>::try_from(opts.rpc_url.as_str())?;
+        let address = *opts.safe.as_address().unwrap();
         let contract = GnosisSafe::new(address, provider.clone().into());
 
         let version_call = contract.version();
@@ -88,7 +90,7 @@ impl Safe {
         );
 
         Ok(Self {
-            address: *opts.safe.as_address().unwrap(),
+            address,
             contract,
             owners: owners.1,
             threshold: threshold.1.as_u32(),
@@ -103,6 +105,11 @@ impl Safe {
         // if there are no owners, return an error
         if self.owners.is_empty() {
             return Err(eyre::eyre!("No owners provided"));
+        }
+
+        // if the keys are already set, return ok
+        if self.pks.is_some() {
+            return Ok(());
         }
 
         // print a blank line
@@ -181,11 +188,11 @@ impl Safe {
         let nonce: U256 = self.contract.nonce().call().await?;
 
         // get the transactions from the Safe transaction service API
-        let url = format!("{}/multisig-transactions/?nonce__gte={}", self.base_url, nonce);
-        let results: Paginated<MsigTxResponse> = reqwest::get(&url)
-            .await?
-            .json()
-            .await?;
+        let url = format!(
+            "{}/multisig-transactions/?nonce__gte={}",
+            self.base_url, nonce
+        );
+        let results: Paginated<MsigTxResponse> = reqwest::get(&url).await?.json().await?;
 
         Ok(results.count > 0)
     }
@@ -287,15 +294,13 @@ impl Safe {
 
     pub async fn get_safe_app_url(&self) -> Result<String> {
         let base_url = "https://app.safe.global";
-    
+
         let chain = SupportedChains::get_chain(self.provider.clone().into()).await?;
 
-        Ok(
-            match chain {
-                SupportedChains::Mainnet => format!("{}/{}:", self.base_url, "eth"),
-                SupportedChains::Goerli => format!("{}/{}:", self.base_url, "gor"),
-                SupportedChains::Gnosis => format!("{}/{}:", self.base_url, "gno"),
-            }
-        )
-    }    
+        Ok(match chain {
+            SupportedChains::Mainnet => format!("{}/{}:", self.base_url, "eth"),
+            SupportedChains::Goerli => format!("{}/{}:", self.base_url, "gor"),
+            SupportedChains::Gnosis => format!("{}/{}:", self.base_url, "gno"),
+        })
+    }
 }

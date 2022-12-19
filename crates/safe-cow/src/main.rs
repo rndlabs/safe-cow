@@ -5,14 +5,7 @@ use eyre::Error;
 
 use ethers::prelude::*;
 
-use safe_cow::{
-    Opts,
-    Commands,
-    SupportedChains,
-    safe,
-    order,
-    sign,
-};
+use safe_cow::{order, safe, sign, Commands, Opts, SupportedChains};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
