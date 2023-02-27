@@ -1,3 +1,0 @@
-[submodule "crates/safe-sdk"]
-	path = crates/safe-sdk
-	url = git@github.com:rndlabs/safe-sdk.git
