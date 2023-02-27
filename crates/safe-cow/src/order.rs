@@ -29,6 +29,11 @@ pub async fn create_order<M>(
 where
     M: JsonRpcClient + Send + Sync + 'static,
 {
+    // Output if sending to a custom address
+    if let Some(address) = config.recipient.clone() {
+        println!("Sending order to custom address: {}", address.as_address().unwrap());
+    }
+
     // set order_tokens to TokenList or Custom depending on the user's choice
     let usable_tokens = match dialoguer::Confirm::new()
         .with_prompt("Use a token list for selecting tokens?")
@@ -155,8 +160,13 @@ where
         // .with_partially_fillable(false)
         .with_sell_token_balance(SellTokenSource::Erc20)
         .with_buy_token_balance(BuyTokenDestination::Erc20)
-        .with_kind(order_kind)
-        .build();
+        .with_kind(order_kind);
+    
+    // if the recipient is set, we set the recipient to the address specified
+    let order = match config.recipient {
+        Some(recipient) => order.with_receiver(Some(*recipient.as_address().unwrap())),
+        None => order,
+    }.build();
 
     // 2. Get the chain, chain id and contract address for the signing domain
     let contract_address = SettlementContract::get_by_chain(&chain).get_address();

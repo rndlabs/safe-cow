@@ -73,6 +73,13 @@ pub struct CreateOrder {
     )]
     pub valid_to: Option<u32>,
     #[clap(
+        long,
+        help = "The recipient of the swapped funds",
+        value_parser = parse_name_or_address,
+        value_name = "RECIPIENT",
+    )]
+    pub recipient: Option<NameOrAddress>,
+    #[clap(
         help = "Use the Cowswap staging environment?",
         value_name = "STAGING",
         default_value = "true"
