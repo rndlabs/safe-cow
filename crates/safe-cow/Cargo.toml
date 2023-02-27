@@ -19,7 +19,7 @@ model = { path = "../model" }
 promkit = { workspace = true }
 reqwest = { workspace = true }
 rpassword = { workspace = true }
-safe-sdk = { path = "../safe-sdk" }
+safe-sdk = { git = "https://github.com/rndlabs/safe-sdk" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 token-list = { workspace = true }
